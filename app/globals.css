@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FFF8EC;
+  --color-cream-2: #FFF0DA;
+  --color-biscuit: #F2B24C;
+  --color-biscuit-deep: #D9902B;
+  --color-choc: #4A2C1A;
+  --color-choc-soft: #7A5238;
+  --color-chip: #3B2216;
+  --color-pink: #FFC2D9;
+  --color-lavender: #CDBBFF;
+  --color-peach: #FFD9B8;
+  --color-blush: #FFE6EE;
+  --color-danger: #E5566B;
+  --color-ok: #6BCB9A;
+  --radius-soft: 12px;
+  --radius-card: 18px;
+  --radius-panel: 24px;
+  --radius-shell: 32px;
+  --radius-pill: 999px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+}
+@theme inline {
+  --font-display: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-body: var(--font-nunito), system-ui, sans-serif;
+}
+:root { color-scheme: light; font-family: var(--font-body); background: var(--color-cream); color: var(--color-choc); }
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overscroll-behavior: none; }
+body { min-height: 100%; font-size: 16px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; overflow: hidden; }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+input, textarea { user-select: text; font-size: 16px; }
+::selection { color: var(--color-choc); background: #f8c5d8; }
+.app-shell { position: relative; isolation: isolate; overflow: hidden; width: 100%; height: 100dvh; min-height: 100dvh; background: var(--color-cream); }
+.mesh-bg { position: absolute; inset: -12%; z-index: -2; overflow: hidden; pointer-events: none; background: var(--color-cream); }
+.mesh-bg::before, .mesh-bg::after { position: absolute; inset: -15%; content: ""; filter: blur(55px); opacity: .72; background: radial-gradient(ellipse at 14% 18%, #ffd4e4 0, transparent 29%), radial-gradient(ellipse at 85% 22%, #ded3ff 0, transparent 34%), radial-gradient(ellipse at 52% 92%, #ffe0bd 0, transparent 36%); animation: drift 32s ease-in-out infinite alternate; }
+.mesh-bg::after { opacity: .34; transform: scale(1.1); animation-duration: 42s; animation-direction: alternate-reverse; }
+.paper-grain { position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.48'/%3E%3C/svg%3E"); }
+.clay { background: var(--color-cream); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 0 rgba(255,255,255,.9), inset 0 -4px 8px rgba(217,144,43,.22), 0 10px 24px rgba(122,82,56,.16); border-radius: 24px; corner-shape: squircle; }
+.clay-gold { color: #fffaf2; background: linear-gradient(150deg, #f5c263 0%, #f2b24c 48%, #d9902b 100%); border: 1px solid rgba(255,255,255,.5); box-shadow: inset 0 2px 0 rgba(255,255,255,.72), inset 0 -4px 8px rgba(139,83,21,.24), 0 10px 22px rgba(176,112,36,.24); border-radius: 24px; corner-shape: squircle; }
+.glass { background: rgba(255,248,236,.74); border: 1px solid rgba(255,255,255,.68); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); box-shadow: 0 8px 24px rgba(100,68,42,.09); }
+.grad-text { color: transparent; background: linear-gradient(100deg,#f39dbb 4%,#ad96ed 52%,#f3b17d 95%); background-clip: text; -webkit-background-clip: text; }
+.shimmer { position: relative; overflow: hidden; background: linear-gradient(110deg,#f5e9d7 8%,#fff8ed 18%,#f5e9d7 33%); background-size: 220% 100%; animation: shimmer 1.4s linear infinite; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.selectable { user-select: text; -webkit-user-select: text; }
+.crumple { position: relative; isolation: isolate; overflow: hidden; }
+.crumple::before { position: absolute; inset: 0; z-index: -1; content: ""; opacity: .12; pointer-events: none; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence baseFrequency='.06' numOctaves='3' seed='2'/%3E%3CfeDiffuseLighting lighting-color='%23fff' surfaceScale='2'%3E%3CfeDistantLight azimuth='45' elevation='60'/%3E%3C/feDiffuseLighting%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E"); }
+.safe-top { padding-top: max(12px, env(safe-area-inset-top)); }
+.safe-bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.cookie-wave { transform-origin: 60px 65px; animation: float 3s ease-in-out infinite; }
+.cookie-hand { transform-origin: 97px 75px; animation: cookie-wiggle 1.7s ease-in-out infinite alternate; }
+@keyframes drift { 0% { transform: translate3d(-2%,0,0) scale(1); } 100% { transform: translate3d(2%,1.5%,0) scale(1.08); } }
+@keyframes bounce-chip { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes crumb-fly { to { transform: translate(var(--dx),var(--dy)) rotate(var(--rot)); opacity: 0; } }
+@keyframes shimmer { to { background-position-x: -220%; } }
+@keyframes pulse-ring { 0% { transform: scale(.84); opacity: .75; } 100% { transform: scale(1.22); opacity: 0; } }
+@keyframes steam { 0% { transform: translateY(5px) scaleX(.7); opacity: 0; } 40% { opacity: .55; } 100% { transform: translateY(-16px) scaleX(1.2); opacity: 0; } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes cookie-wiggle { to { transform: rotate(-12deg); } }
+@media (min-width: 768px) { body { display: grid; place-items: center; background: #eee6db; } .app-shell { width: min(430px,100vw); height: min(932px,100dvh); min-height: 0; border-radius: 44px; box-shadow: 0 24px 80px rgba(75,48,29,.22); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+html[data-reduce="1"] .mesh-bg::before, html[data-reduce="1"] .mesh-bg::after { animation: none; }
+html[data-reduce="1"] .cookie-fx-layer { display: none; }
