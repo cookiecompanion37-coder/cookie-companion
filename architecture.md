@@ -117,8 +117,10 @@ call-slot usage. `POST /api/admin/personas` creates rows in one batch, respectin
 ### Call rotator
 
 `POST /api/calls/slot` claims a lease (1–14), heartbeats extend it, release frees it;
-`lib/callsClient.ts` owns the browser side. `POST /api/calls/busy` gets the in-character
-excuse + delay; `POST /api/calls/schedule` stores the callback and resolves it
+`lib/callsClient.ts` owns the browser side. `POST /api/calls/busy` gets a deliberately
+vague in-character excuse ("this evening", "in a bit") plus a server-chosen random 2–8
+minute callback window that is never shown to the user; `POST /api/calls/schedule` stores
+the callback and resolves it
 (`connected|missed|cancelled`). `GET /api/calls/schedule?user=` returns due rings and recent
 history; the engine polls it every 45 s while the tab is visible.
 

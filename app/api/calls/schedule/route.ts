@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pendingCallbacks, recentCallbacks, resolveCallback, scheduleCallback } from "@/lib/server/calls";
+import { busyDelayMinutes, pendingCallbacks, recentCallbacks, resolveCallback, scheduleCallback } from "@/lib/server/calls";
 
 /**
  * Callback notes. The rotator writes one when every slot is busy; the calls
@@ -36,7 +36,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     if (!body.characterId || !body.characterName) return NextResponse.json({ error: "character_required" }, { status: 400 });
-    const minutes = Math.min(90, Math.max(10, Number(body.minutes) || 25));
+    // Callbacks are deliberately short and random; never let a client park one
+    // hours out and block the rotator.
+    const requested = Number(body.minutes);
+    const minutes = Number.isFinite(requested) && requested >= 1
+      ? Math.min(8, Math.round(requested))
+      : busyDelayMinutes();
     const schedule = await scheduleCallback({
       characterId: body.characterId,
       characterName: body.characterName,

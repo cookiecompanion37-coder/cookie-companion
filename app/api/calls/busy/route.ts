@@ -3,7 +3,8 @@ import { writeBusyNote } from "@/lib/server/calls";
 
 /**
  * The in-character "I'm busy, I'll call you back" message plus the delay the
- * scheduler should use. One cheap LLM call, hard-clamped to 10–90 minutes.
+ * scheduler should use. One cheap LLM call; the note stays vague while the
+ * actual callback is a random 2–8 minutes, chosen server-side.
  */
 export const runtime = "nodejs";
 export const maxDuration = 60;

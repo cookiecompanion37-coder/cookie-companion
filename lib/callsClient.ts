@@ -57,12 +57,13 @@ export async function writeBusyNote(character: { name: string; personality?: str
     });
     if (!response.ok) throw new Error("busy_failed");
     const data = await response.json() as Partial<BusyNote>;
+    const minutes = Number(data.minutes);
     return {
-      note: typeof data.note === "string" && data.note ? data.note : "i'm a little tied up — call you back soon?",
-      minutes: Number.isFinite(Number(data.minutes)) ? Math.min(90, Math.max(10, Number(data.minutes))) : 25,
+      note: typeof data.note === "string" && data.note ? data.note : "i'm a little tied up — i'll call you back soon",
+      minutes: Number.isFinite(minutes) ? Math.min(8, Math.max(1, Math.round(minutes))) : 2 + Math.floor(Math.random() * 7),
     };
   } catch {
-    return { note: "i'm a little tied up — call you back soon?", minutes: 25 };
+    return { note: "i'm a little tied up — i'll call you back soon", minutes: 2 + Math.floor(Math.random() * 7) };
   }
 }
 

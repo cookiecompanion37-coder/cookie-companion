@@ -6,8 +6,11 @@ import { getGpuUrl } from "@/lib/server/gpu";
 function err(msg: string, status = 500) { return NextResponse.json({ error: msg }, { status }); }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const ct = request.headers.get("content-type") ?? "";
+  if (!ct.includes("multipart/form-data") && !ct.includes("application/json")) {
+    return err("unsupported_content_type", 415);
+  }
   try {
-    const ct = request.headers.get("content-type") ?? "";
 
     // ── Image Analysis: multipart FormData ──────────────────────────────────
     if (ct.includes("multipart/form-data")) {
@@ -39,7 +42,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // ── JSON actions: generate submit or poll ────────────────────────────────
-    const body = await request.json() as { action?: unknown; prompt?: unknown; jobId?: unknown; base?: unknown; side?: unknown; ar?: unknown; seed?: unknown };
+    let body: { action?: unknown; prompt?: unknown; jobId?: unknown; base?: unknown; side?: unknown; ar?: unknown; seed?: unknown };
+    try { body = await request.json(); } catch { return err("invalid_json", 400); }
     const action = body.action;
 
     if (action === "generate") {

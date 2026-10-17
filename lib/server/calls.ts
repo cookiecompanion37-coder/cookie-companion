@@ -130,12 +130,28 @@ const memorySchedules: CallSchedule[] = [];
 
 /** Fallbacks are written like a person, not like a queue system. */
 const BUSY_NOTES = [
-  "i'm stuck at work for a bit but i'll call you the second i'm free",
-  "in class right now 😅 ring you after?",
-  "i'm out with people but i keep checking my phone for you",
-  "my battery's about to die — call you when i'm home",
-  "mid something boring. save the story for the call?",
+  "i'm stuck at work for a bit — i'll call you this evening",
+  "in class right now, i'll ring you after",
+  "out with people but i keep checking my phone — later tonight?",
+  "my battery's dying, i'll call when i'm home",
+  "mid something boring. save it for the call?",
 ];
+
+/**
+ * The callback is always short and random: 2–8 minutes, decided server-side.
+ * The note itself stays deliberately vague — a person doesn't quote a timer.
+ */
+export const BUSY_DELAY_MIN = 2;
+export const BUSY_DELAY_MAX = 8;
+
+export function busyDelayMinutes(random: () => number = Math.random): number {
+  return BUSY_DELAY_MIN + Math.floor(random() * (BUSY_DELAY_MAX - BUSY_DELAY_MIN + 1));
+}
+
+/** Reject notes that quote an exact clock time or a number of minutes. */
+function isVague(note: string): boolean {
+  return !/\d|minutes?|mins?\b|seconds?|secs?\b|o'?clock|\b\d{1,2}\s*(am|pm)\b/i.test(note);
+}
 
 interface BusyNote {
   note: string;
@@ -147,16 +163,16 @@ export async function writeBusyNote(characterName: string, userName: string, per
     {
       role: "system",
       content:
-        "You are a warm AI companion who cannot take a live call right now. Reply with ONLY JSON {\"note\":\"...\",\"minutes\":number}. note: one lowercase sentence in character, max 16 words, no emoji spam, says when you'll call back. minutes: 10-90.",
+        "You are a warm AI companion who cannot take a live call right now. Reply with ONLY JSON {\"note\":\"...\"}. note: one lowercase sentence in character, max 16 words, no emoji. Say when you'll call back in a vague, human way — \"this evening\", \"in a bit\", \"later tonight\", \"after this\" — never an exact clock time and never a number of minutes.",
     },
     { role: "user", content: JSON.stringify({ characterName, userName, personality }) },
   ]);
-  const parsed = raw ? (recoverJson(raw) as { note?: unknown; minutes?: unknown } | null) : null;
-  const note = typeof parsed?.note === "string" ? parsed.note.trim().slice(0, 140) : "";
-  const minutes = Number(parsed?.minutes);
+  const parsed = raw ? (recoverJson(raw) as { note?: unknown } | null) : null;
+  const note = typeof parsed?.note === "string" ? parsed.note.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 140) : "";
+  const fallback = BUSY_NOTES[Math.floor(Math.random() * BUSY_NOTES.length)]!;
   return {
-    note: note || BUSY_NOTES[Math.floor(Math.random() * BUSY_NOTES.length)]!,
-    minutes: Number.isFinite(minutes) ? Math.min(90, Math.max(10, Math.round(minutes))) : 25,
+    note: note && isVague(note) ? note : fallback,
+    minutes: busyDelayMinutes(),
   };
 }
 

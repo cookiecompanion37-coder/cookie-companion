@@ -353,7 +353,7 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
       const { note, minutes } = await writeBusyNote({ name: character.name, personality: character.personality }, userName);
       if (!getState().chats[id]) setState((state) => ({ ...state, chats: { ...state.chats, [id]: emptyChat(id) } }));
       addAI(id, note, bump(id));
-      toast(`${character.name} will call you in about ${minutes} minutes`);
+      toast(`${character.name} can't talk right now — they'll call you back soon`);
       void scheduleCallback({ characterId: id, characterName: character.name, userName, note, minutes });
     })();
   };

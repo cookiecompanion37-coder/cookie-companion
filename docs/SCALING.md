@@ -151,8 +151,9 @@ select status, return_message, start_time from cron.job_run_details order by sta
 - 16 physical slots, **14 usable** (2 spare for headroom).
 - Claims are atomic (`FOR UPDATE SKIP LOCKED`); a session re-claim keeps its slot. The lease
   is 120 s and the client heartbeats every 30 s while a call is live.
-- When the pool is full, the LLM writes an in-character excuse plus a callback delay
-  (10–90 min). That becomes a `call_schedules` row.
+- When the pool is full, the LLM writes a deliberately vague in-character excuse
+  ("this evening", "in a bit") and the server schedules a random 2–8 minute callback
+  without ever quoting that window to the user. That becomes a `call_schedules` row.
 - `/api/cron/calls` flips due rows to `ringing`; the app polls `/api/calls/schedule` and
   raises the incoming-call screen. Unanswered rings become `missed`.
 - Everything degrades to an in-memory rotator when Supabase is not configured.

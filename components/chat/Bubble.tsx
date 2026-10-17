@@ -15,7 +15,7 @@ function ImageBubble({ msg }: { msg: Msg }): React.JSX.Element | null {
   const image = msg.image;
   if (!image) return null;
   return (
-    <div className="relative overflow-hidden rounded-[22px] border border-white/60 bg-[linear-gradient(150deg,#ffe0ea,#ffeede_55%,#efe3ff)] shadow-[0_16px_32px_-22px_rgba(120,20,60,.6)]">
+    <div className="relative w-[236px] max-w-[70vw] overflow-hidden rounded-[22px] border border-white/60 bg-[linear-gradient(150deg,#ffe0ea,#ffeede_55%,#efe3ff)] shadow-[0_16px_32px_-22px_rgba(120,20,60,.6)]">
       <div style={{ aspectRatio: RATIO[image.ar] ?? "4 / 5" }} className="relative w-full">
         {image.status === "ready" && image.url ? (
           // eslint-disable-next-line @next/next/no-img-element
