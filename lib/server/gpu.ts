@@ -1,8 +1,8 @@
 // GPU server client — fetches live Cloudflare tunnel URL from Supabase and wraps all 5 GPU routes.
 // The URL rotates on every Kaggle session; always resolve before each request.
 
-const SB = "https://xiwpzkuuoiwwwkrbphbp.supabase.co";
-const AK = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhpd3B6a3V1b2l3d3drcmJwaGJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxOTU5MTksImV4cCI6MjEwNzc3MTkxOX0.xSZfM1IYdkefsIihLv74N3-wVvt4rlOSMbIgMepvLlI";
+const SB = process.env.GPU_NODE_SUPABASE_URL ?? "https://xiwpzkuuoiwwwkrbphbp.supabase.co";
+const AK = process.env.GPU_NODE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhpd3B6a3V1b2l3d3drcmJwaGJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxOTU5MTksImV4cCI6MjEwNzc3MTkxOX0.xSZfM1IYdkefsIihLv74N3-wVvt4rlOSMbIgMepvLlI";
 
 let cachedUrl: string | null = null;
 let cacheExpiry = 0;
@@ -13,7 +13,7 @@ export async function getGpuUrl(): Promise<string | null> {
   try {
     const r = await fetch(
       `${SB}/rest/v1/active_nodes?id=eq.0&select=node_url&limit=1`,
-      { headers: { apikey: AK, Authorization: `Bearer ${AK}` }, next: { revalidate: 60 } },
+      { headers: { apikey: AK, Authorization: `Bearer ${AK}` }, next: { revalidate: 60 }, signal: AbortSignal.timeout(5_000) },
     );
     if (!r.ok) return null;
     const d = await r.json() as Array<{ node_url?: string | null }>;
@@ -108,36 +108,114 @@ export async function gpuVoicePreview(voiceDescription: string, text: string): P
   } catch { return null; }
 }
 
-/** POST /v1/image-generate — async image gen; returns job_id */
+/** POST /v1/image-generate — async image gen; returns job_id. */
 export async function gpuImageGenerateSubmit(
   prompt: string,
-  opts: { side?: number; ar?: string; seed?: number } = {},
+  opts: { side?: number; ar?: string; seed?: number; image?: Blob; format?: "png" | "jpeg" | "webp" } = {},
 ): Promise<{ base: string; jobId: string } | null> {
   const base = await getGpuUrl();
   if (!base) return null;
   try {
-    const r = await fetch(`${base}/v1/image-generate`, {
+    const { image, ...fields } = opts;
+    // With a reference image the endpoint wants multipart/form-data; without one
+    // it takes plain JSON. Both share the same job/poll contract.
+    const body = image ? (() => {
+      const form = new FormData();
+      form.append("prompt", prompt);
+      form.append("image", image, "reference.jpg");
+      if (fields.side) form.append("side", String(fields.side));
+      if (fields.ar) form.append("ar", fields.ar);
+      if (fields.seed !== undefined) form.append("seed", String(fields.seed));
+      if (fields.format) form.append("format", fields.format);
+      return form;
+    })() : JSON.stringify({ prompt, ...fields });
+    const response = await fetch(`${base}/v1/image-generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, ...opts }),
-      signal: AbortSignal.timeout(15_000),
+      headers: image ? undefined : { "Content-Type": "application/json" },
+      body,
+      signal: AbortSignal.timeout(20_000),
     });
-    if (!r.ok) return null;
-    const d = await r.json() as { job_id: string };
-    return { base, jobId: d.job_id };
+    if (!response.ok) return null;
+    const data = await response.json() as { job_id?: string };
+    return data.job_id ? { base, jobId: data.job_id } : null;
   } catch { return null; }
 }
 
-/** GET /v1/image-generate/:jobId — poll status */
-export async function gpuImageGeneratePoll(
-  base: string,
-  jobId: string,
-): Promise<{ status: "queued" | "running" | "done" | "failed"; image_url?: string; error?: string }> {
+export interface GpuImageJob {
+  status: "queued" | "running" | "done" | "failed";
+  imageUrl?: string;
+  error?: string;
+  progress?: number;
+  steps?: number;
+  queuePosition?: number;
+}
+
+/** GET /v1/image-generate/:jobId — poll status. */
+export async function gpuImageGeneratePoll(base: string, jobId: string): Promise<GpuImageJob> {
   try {
-    const r = await fetch(`${base}/v1/image-generate/${jobId}`, { signal: AbortSignal.timeout(8_000) });
-    if (!r.ok) return { status: "failed", error: "http_error" };
-    return await r.json() as { status: "queued" | "running" | "done" | "failed"; image_url?: string };
-  } catch { return { status: "failed", error: "network" }; }
+    const response = await fetch(`${base}/v1/image-generate/${encodeURIComponent(jobId)}`, {
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    });
+    if (!response.ok) return { status: "failed", error: `http_${response.status}` };
+    const payload = await response.json() as {
+      status?: string; error?: string; progress?: number; steps?: number; queue_position?: number;
+      result?: { image_url?: string; image_path?: string };
+      image_url?: string;
+    };
+    const status = payload.status === "done" || payload.status === "failed" || payload.status === "queued" || payload.status === "running"
+      ? payload.status
+      : "failed";
+    const imageUrl = payload.result?.image_url ?? (payload.result?.image_path ? `${base}${payload.result.image_path}` : payload.image_url);
+    return {
+      status,
+      imageUrl,
+      error: typeof payload.error === "string" ? payload.error : undefined,
+      progress: payload.progress,
+      steps: payload.steps,
+      queuePosition: payload.queue_position,
+    };
+  } catch {
+    // A transient poll failure must not kill the job; report it as still running.
+    return { status: "running", error: "network" };
+  }
+}
+
+/** GET /v1/image-generate — is the model loaded on the GPU node? */
+export async function gpuImageReady(): Promise<{ ready: boolean; model: string } | null> {
+  const base = await getGpuUrl();
+  if (!base) return null;
+  try {
+    const response = await fetch(`${base}/v1/image-generate`, { signal: AbortSignal.timeout(6_000), cache: "no-store" });
+    if (!response.ok) return { ready: false, model: "" };
+    const data = await response.json() as { ready?: boolean; model?: string };
+    return { ready: data.ready === true, model: data.model ?? "" };
+  } catch { return null; }
+}
+
+/** DELETE /v1/image-generate/:jobId — free the GPU queue when a job is abandoned. */
+export async function gpuImageCancel(base: string, jobId: string): Promise<void> {
+  try {
+    await fetch(`${base}/v1/image-generate/${encodeURIComponent(jobId)}`, {
+      method: "DELETE",
+      signal: AbortSignal.timeout(6_000),
+    });
+  } catch { /* the job expires on its own */ }
+}
+
+/**
+ * The result URL is only valid while the job lives in GPU memory (~20 min), and
+ * it must live on the same tunnel we submitted to. Anything else is rejected so
+ * this never becomes an open proxy.
+ */
+export async function gpuImageDownload(base: string, imageUrl: string): Promise<Response | null> {
+  try {
+    const target = new URL(imageUrl);
+    const origin = new URL(base);
+    if (target.protocol !== "https:" || target.host !== origin.host) return null;
+    const response = await fetch(target, { signal: AbortSignal.timeout(25_000), cache: "no-store" });
+    return response.ok ? response : null;
+  } catch { return null; }
 }
 
 /** POST /v1/call/session — create a live call session, returns ws URL */

@@ -70,9 +70,11 @@ export function useCallSession(): {
   submit(value: string): void;
   captions: boolean;
   canUseVoice: boolean;
+  heard: string;
 } {
   const { call, callTurn } = useEngine();
   const [transcript, setTranscript] = useState("");
+  const [heard, setHeard] = useState("");
   const [draft, setDraft] = useState("");
   const [canUseVoice, setCanUseVoice] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -83,7 +85,7 @@ export function useCallSession(): {
 
   const submit = useCallback((value: string) => {
     const text = value.trim(); if (!text) return;
-    callTurn(text); setDraft(""); setTranscript("");
+    callTurn(text); setDraft(""); setTranscript(""); setHeard("");
   }, [callTurn]);
 
   // ── GPU WebSocket live-call ─────────────────────────────────────────────
@@ -136,11 +138,13 @@ export function useCallSession(): {
 
           if (m.type === "user" && m.text) {
             setTranscript(m.text);
+            setHeard(m.text);
             setState((s) => appendMessage(s, characterId, newMessage("user", m.text!), false, true));
           }
 
           if (m.type === "bot" && m.text) {
             setTranscript("");
+            setHeard("");
             setState((s) => appendMessage(s, characterId, newMessage("assistant", m.text!)));
             window.dispatchEvent(new CustomEvent("cc:callAi", { detail: { characterId, text: m.text } }));
           }
@@ -164,7 +168,15 @@ export function useCallSession(): {
       setCanUseVoice(false);
     };
 
+    const onText = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      if (!detail?.text) return;
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "text", text: detail.text }));
+    };
+    window.addEventListener("cc:callText", onText);
+
     return () => {
+      window.removeEventListener("cc:callText", onText);
       stopMic?.();
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         try { ws.send(JSON.stringify({ type: "hangup" })); } catch { /* ignore */ }
@@ -207,5 +219,5 @@ export function useCallSession(): {
     return () => { if (silenceTimer !== null) window.clearTimeout(silenceTimer); recognizer.stop(); };
   }, [call?.characterId, call?.phase, call?.muted, call?.wsUrl, submit]);
 
-  return { level, transcript, draft, setDraft, submit, captions: true, canUseVoice };
+  return { level, transcript, draft, setDraft, submit, captions: true, canUseVoice, heard };
 }

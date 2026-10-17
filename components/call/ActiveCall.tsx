@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Captions, Mic, MicOff, PhoneOff, Volume2, VolumeX } from "lucide-react";
+import { Captions, Mic, MicOff, Phone, PhoneOff, Volume2, VolumeX } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useCallSession } from "@/lib/engine/useCallSession";
 import { useEngine } from "@/lib/engine/EngineProvider";
@@ -12,38 +12,94 @@ import { formatTime } from "@/lib/utils";
 import { useAppState, setState } from "@/lib/store";
 import { callSecondsLeft } from "@/lib/credits";
 
-const phaseLabel = { connecting: "Connecting…", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…" };
+const phaseLabel = { connecting: "connecting…", listening: "listening", thinking: "thinking…", speaking: "speaking" };
 export function ActiveCall(): React.JSX.Element | null {
-  const { call, endCall, setMuted, setSpeaker } = useEngine(); const state = useAppState();
-  const session = useCallSession(); const [caption, setCaption] = useState("");
+  const { call, endCall, setMuted, setSpeaker } = useEngine();
+  const state = useAppState();
+  const session = useCallSession();
+  const [caption, setCaption] = useState("");
   const character = call ? findCharacter(state, call.characterId) : undefined;
+  const startedAt = call ? Date.now() - call.seconds * 1000 : 0;
+  const lastAiMessage = call
+    ? [...(state.chats[call.characterId]?.messages ?? [])].reverse().find((message) => message.role === "assistant" && message.text && message.ts >= startedAt - 2500)
+    : undefined;
+  const spoken = call?.ai || lastAiMessage?.text || "";
+
   useEffect(() => {
-    if (!call?.ai) { setCaption(""); return; }
-    const words = call.ai.split(/\s+/); let index = 0;
-    const timer = window.setInterval(() => { index += 1; setCaption(words.slice(0, index).join(" ")); if (index >= words.length) window.clearInterval(timer); }, 180);
+    if (!spoken) { setCaption(""); return; }
+    const words = spoken.split(/\s+/);
+    let index = 0;
+    const timer = window.setInterval(() => { index += 1; setCaption(words.slice(0, index).join(" ")); if (index >= words.length) window.clearInterval(timer); }, 170);
     return () => window.clearInterval(timer);
-  }, [call?.ai]);
+  }, [spoken]);
+
   if (!call || !character) return null;
   const secondsLeft = callSecondsLeft(state);
-  const scale = 1 + Math.min(.13, session.level * .14);
+  const scale = 1 + Math.min(0.12, session.level * 0.14);
   const toggleCaptions = () => setState((current) => ({ ...current, settings: { ...current.settings, captions: !current.settings.captions } }));
-  return <motion.div className="absolute inset-0 z-[55] flex flex-col items-center overflow-hidden px-6 pb-[max(24px,env(safe-area-inset-bottom))] pt-[max(42px,env(safe-area-inset-top))] text-center text-choc" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: `radial-gradient(circle at 50% 30%,${character.accent}88,${character.accent}22 50%,#fffbf0 100%)` }}>
-    <div className="absolute inset-0 bg-cream/40 backdrop-blur-2xl"/><div className="relative z-10 flex w-full items-center justify-between"><span className="rounded-full bg-white/65 px-3 py-2 text-xs font-bold">Cookie · voice call</span><span className={`rounded-full px-3 py-2 text-xs font-bold ${secondsLeft < 60 ? "bg-peach text-choc" : "bg-white/65"}`}>📞 {formatTime(secondsLeft)} left</span></div>
-    <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center"><div className="relative grid h-[260px] w-[260px] place-items-center">
-      {[0, 1, 2].map((ring) => <motion.span key={ring} className="absolute rounded-full border-2 border-white/75" style={{ inset: `${ring * 18}px`, scale }} animate={{ opacity: call.phase === "speaking" ? [.45, .9, .45] : [.22, .48, .22] }} transition={{ duration: 2, repeat: Infinity, delay: ring * .2 }} />)}
-      <Avatar character={character} size={172} ring/>
-    </div><h1 className="mt-2 font-display text-3xl font-bold">{character.name}</h1><p className="mt-2 text-sm font-semibold text-choc-soft">{phaseLabel[call.phase]}</p><p className="mt-2 font-display text-2xl font-bold tabular-nums">{formatTime(call.seconds)}</p>
-      {state.settings.captions && <div className="mt-4 min-h-[68px] max-w-sm rounded-[22px] bg-white/55 px-4 py-3 text-sm leading-relaxed">{call.user && <p className="mb-1 text-xs text-choc-soft/70">You: {call.user}</p>}<p>{caption || (call.phase === "speaking" ? "…" : "")}</p></div>}
-      {!session.canUseVoice && <form className="mt-3 flex w-full max-w-sm gap-2" onSubmit={(event) => { event.preventDefault(); session.submit(session.draft); }}><input aria-label="Type to talk" value={session.draft} onChange={(event) => session.setDraft(event.target.value)} placeholder="Type to talk…" className="min-h-11 flex-1 rounded-full border border-white bg-white/75 px-4 outline-none"/><button aria-label="Send" className="min-h-11 rounded-full px-4 font-bold text-choc [background:linear-gradient(135deg,#ffd9a6,#ffb3d1_45%,#c9b0ff)]">Send</button></form>}
-    </div>
-    <div className="relative z-10 flex w-full max-w-sm items-center justify-between rounded-[28px] bg-white/60 px-3 py-4 shadow-lg">
-      <Control label={call.muted ? "Unmute" : "Mute"} active={call.muted} onClick={() => setMuted(!call.muted)} icon={call.muted ? <MicOff size={20}/> : <Mic size={20}/>}/>
-      <Control label={call.speaker ? "Speaker" : "Earpiece"} active={call.speaker} onClick={() => setSpeaker(!call.speaker)} icon={call.speaker ? <Volume2 size={20}/> : <VolumeX size={20}/>}/>
-      <Control label={state.settings.captions ? "Captions on" : "Captions off"} active={state.settings.captions} onClick={toggleCaptions} icon={<Captions size={20}/>}/>
-      <button type="button" onClick={endCall} aria-label="End call" className="flex h-14 w-14 items-center justify-center rounded-full bg-danger text-white shadow-lg"><PhoneOff size={23}/></button>
-    </div>
-  </motion.div>;
+
+  return (
+    <motion.div initial={{ opacity: 0, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[75] flex flex-col overflow-hidden bg-[#240812] text-white">
+      {character.photo ? (
+        <img src={character.photo} alt={character.name} className="absolute inset-0 h-full w-full scale-110 object-cover blur-[2px]" />
+      ) : (
+        <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${character.accent}, #3a1229)` }} />
+      )}
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,4,12,.55)_0%,rgba(20,4,12,.25)_28%,rgba(20,4,12,.82)_82%,#1c0710_100%)]" />
+
+      <div className="relative z-10 flex items-center justify-between px-5 pt-[max(20px,env(safe-area-inset-top))]">
+        <span className="rounded-full bg-white/15 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.16em] backdrop-blur-md">AI voice call</span>
+        <span className={`rounded-full px-3 py-1.5 text-[10px] font-bold backdrop-blur-md ${secondsLeft < 60 ? "bg-[#ffd9a6] text-[#5c2a3b]" : "bg-white/15"}`}><Phone size={11} className="mr-1 inline" />{formatTime(secondsLeft)} left</span>
+      </div>
+
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-2 text-center">
+        <div className="relative grid h-[min(52vw,206px)] w-[min(52vw,206px)] place-items-center">
+          {[0, 1, 2].map((ring) => (
+            <motion.span
+              key={ring}
+              className="absolute rounded-full border border-white/50"
+              style={{ inset: `${ring * 20}px`, scale }}
+              animate={{ opacity: call.phase === "speaking" ? [0.5, 0.95, 0.5] : [0.2, 0.45, 0.2] }}
+              transition={{ duration: 2.1, repeat: Infinity, delay: ring * 0.22 }}
+            />
+          ))}
+          <Avatar character={character} size={132} shape="circle" ring />
+        </div>
+        <h1 className="mt-3 font-display text-[30px] font-semibold leading-tight drop-shadow-sm">{character.name}</h1>
+        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-white/70">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7fe3b4]" />
+          {phaseLabel[call.phase]} · {formatTime(call.seconds)}
+        </div>
+
+        {state.settings.captions && (
+          <div className="mt-5 min-h-[62px] max-w-[330px] rounded-[22px] border border-white/15 bg-black/25 px-4 py-3 text-[12.5px] leading-relaxed backdrop-blur-md">
+            {(session.heard || call.user) && <p className="mb-1 text-[10px] text-white/50">you said · {session.heard || call.user}</p>}
+            <p className="min-h-[18px]">{caption || (call.phase === "speaking" ? "…" : call.phase === "connecting" ? "connecting the call…" : "I'm listening…")}</p>
+          </div>
+        )}
+
+        {!session.canUseVoice && (
+          <form className="mt-3 flex w-full max-w-[330px] gap-2" onSubmit={(event) => { event.preventDefault(); session.submit(session.draft); }}>
+            <input aria-label="Type to talk" value={session.draft} onChange={(event) => session.setDraft(event.target.value)} placeholder="Type to talk…" className="min-h-11 flex-1 rounded-full border border-white/20 bg-white/10 px-4 text-[12px] text-white outline-none placeholder:text-white/50" />
+            <button type="submit" aria-label="Send" className="min-h-11 rounded-full bg-white px-4 font-display text-[12px] font-bold text-[#c60f4d]">Send</button>
+          </form>
+        )}
+      </div>
+
+      <div className="relative z-10 mx-auto mb-[max(18px,env(safe-area-inset-bottom))] flex w-full max-w-[340px] items-center justify-between rounded-[28px] border border-white/15 bg-black/25 px-3.5 py-3 backdrop-blur-xl">
+        <Control label={call.muted ? "Muted" : "Mute"} active={call.muted} onClick={() => setMuted(!call.muted)} icon={call.muted ? <MicOff size={19} /> : <Mic size={19} />} />
+        <Control label="Speaker" active={call.speaker} onClick={() => setSpeaker(!call.speaker)} icon={call.speaker ? <Volume2 size={19} /> : <VolumeX size={19} />} />
+        <Control label="Captions" active={state.settings.captions} onClick={toggleCaptions} icon={<Captions size={19} />} />
+        <button type="button" onClick={endCall} aria-label="End call" className="press grid h-14 w-14 place-items-center rounded-full bg-[#e5395c] text-white shadow-[0_12px_26px_-10px_rgba(229,57,92,.9)]"><PhoneOff size={23} /></button>
+      </div>
+    </motion.div>
+  );
 }
+
 function Control({ label, active, onClick, icon }: { label: string; active: boolean; onClick(): void; icon: ReactNode }): React.JSX.Element {
-  return <button type="button" aria-label={label} onClick={onClick} className={`flex min-h-14 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs ${active ? "bg-choc/10 text-choc" : "text-choc-soft"}`}>{icon}<span>{label}</span></button>;
+  return (
+    <button type="button" aria-label={label} onClick={onClick} className={`press flex min-h-[54px] min-w-[58px] flex-col items-center justify-center gap-1 rounded-[18px] text-[8.5px] font-semibold ${active ? "bg-white/20 text-white" : "text-white/65"}`}>
+      {icon}<span>{label}</span>
+    </button>
+  );
 }

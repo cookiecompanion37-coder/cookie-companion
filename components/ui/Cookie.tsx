@@ -61,10 +61,38 @@ export function Cookie({ size = 120, mood = "wave", bites = 1, className }: { si
   );
 }
 
-export function BrandLockup({ height = 210, float = false, className }: { height?: number; float?: boolean; className?: string }): React.JSX.Element {
-  return <img src="/cookie-brand.png" alt="Cookie — AI Companion" draggable={false} className={cn("pointer-events-none select-none mix-blend-multiply", float && "animate-[float_4.5s_ease-in-out_infinite]", className)} style={{ height, width: "auto" }} />;
+export function BrandLockup({ height = 210, float = false, className }: { height?: number | string; float?: boolean; className?: string }): React.JSX.Element {
+  return (
+    <img
+      src="/cookie-hero.png"
+      alt="Cookie — AI Companion"
+      draggable={false}
+      className={cn(
+        "pointer-events-none select-none rounded-[34px] shadow-[0_30px_60px_-30px_rgba(160,20,70,.55)] ring-1 ring-white/70",
+        float && "animate-[float_5s_ease-in-out_infinite]",
+        className,
+      )}
+      style={{ height, width: "auto" }}
+    />
+  );
 }
 
 export function CookieMark({ size = 56, float = false, className }: { size?: number; float?: boolean; className?: string }): React.JSX.Element {
-  return <img src="/cookie-logo.png" alt="Cookie" draggable={false} className={cn("pointer-events-none select-none", float && "animate-[float_4.5s_ease-in-out_infinite]", className)} style={{ width: size, height: size }} />;
+  return (
+    <img
+      src="/cookie-logo.png"
+      alt="Cookie"
+      draggable={false}
+      className={cn("pointer-events-none select-none rounded-[26%] ring-1 ring-white/60", float && "animate-[float_5s_ease-in-out_infinite]", className)}
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+export function Wordmark({ className }: { className?: string }): React.JSX.Element {
+  return (
+    <span className={cn("inline-flex items-baseline font-display text-[26px] font-bold tracking-tight text-[#f5286e]", className)}>
+      C<span className="mx-[1px] inline-block align-middle text-[22px]">🍪</span>okie
+    </span>
+  );
 }

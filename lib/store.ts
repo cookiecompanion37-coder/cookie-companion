@@ -2,8 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 import { refillIfNewDay } from "@/lib/credits";
+import { DEFAULT_WALLPAPER } from "@/lib/theme";
 import { DEFAULT_STATE } from "@/lib/seed";
-import type { AppState } from "@/lib/types";
+import type { AppState, Character, Chat, Msg, Session } from "@/lib/types";
 
 const STORAGE_KEY = "cookie:v1";
 let state: AppState = DEFAULT_STATE;
@@ -14,14 +15,36 @@ const listeners = new Set<() => void>();
 const hydrationListeners = new Set<() => void>();
 function notify(): void { listeners.forEach((listener) => listener()); }
 
+function normalizeCharacter(character: Character): Character {
+  return {
+    ...character,
+    appearance: character.appearance ?? "",
+    gallery: Array.isArray(character.gallery) ? character.gallery : [],
+  };
+}
+function normalizeMessages(chat: Chat): Chat {
+  return {
+    ...chat,
+    messages: Array.isArray(chat.messages) ? chat.messages.map((message) => ({ ...message, reactions: message.reactions ?? [] } as Msg)) : [],
+  };
+}
 function mergeStored(value: unknown): AppState {
   if (!value || typeof value !== "object") return DEFAULT_STATE;
-  const stored = value as Partial<AppState>;
+  const stored = value as Partial<AppState> & { session?: Partial<Session> | null };
+  const chats: Record<string, Chat> = {};
+  for (const [id, chat] of Object.entries(stored.chats ?? {})) if (chat) chats[id] = normalizeMessages(chat);
   return {
     ...DEFAULT_STATE, ...stored,
+    session: stored.session ? { name: stored.session.name ?? "friend", email: stored.session.email ?? "", vibe: stored.session.vibe ?? "Cozy", interests: stored.session.interests ?? [] } : null,
     credits: { ...DEFAULT_STATE.credits, ...(stored.credits ?? {}) },
     settings: { ...DEFAULT_STATE.settings, ...(stored.settings ?? {}) },
-    chats: stored.chats ?? {}, customCharacters: stored.customCharacters ?? [], memory: stored.memory ?? {}, calls: stored.calls ?? [],
+    wallpaper: stored.wallpaper ?? DEFAULT_WALLPAPER,
+    characterWallpapers: stored.characterWallpapers ?? {},
+    chats,
+    customCharacters: (stored.customCharacters ?? []).map(normalizeCharacter),
+    sharedCharacters: (stored.sharedCharacters ?? []).map(normalizeCharacter),
+    memory: stored.memory ?? {},
+    calls: stored.calls ?? [],
   };
 }
 function loadOnce(): void {
@@ -61,7 +84,7 @@ export function useAppState(): AppState { return useSyncExternalStore(subscribe,
 export function useHydrated(): boolean { return useSyncExternalStore(subscribeHydration, () => hydrated, () => false); }
 export function resetAll(): void {
   loaded = true; hydrated = true;
-  setState(() => ({ ...DEFAULT_STATE, credits: { ...DEFAULT_STATE.credits }, settings: { ...DEFAULT_STATE.settings }, chats: {}, customCharacters: [], memory: {}, calls: [] }));
+  setState(() => ({ ...DEFAULT_STATE, credits: { ...DEFAULT_STATE.credits }, settings: { ...DEFAULT_STATE.settings } }));
   if (typeof window !== "undefined") {
     if (writeTimer !== null) window.clearTimeout(writeTimer);
     try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* Storage may be unavailable. */ }

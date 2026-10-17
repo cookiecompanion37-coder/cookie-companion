@@ -8,6 +8,9 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // The dev server is proxied by the Arena preview host, so accept it.
+  allowedDevOrigins: ["*.e2b.app", "localhost", "127.0.0.1"],
+  devIndicators: false,
 };
 
 export default nextConfig;

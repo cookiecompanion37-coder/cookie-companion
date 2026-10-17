@@ -14,10 +14,11 @@ import { rand, uid } from "@/lib/utils";
 import { speak } from "@/lib/voice";
 import { haptic } from "@/lib/haptics";
 import { callGpuCallSession } from "@/lib/engine/api";
+import { releaseCallSlot } from "@/lib/callsClient";
 
 interface CallControlArgs {
-  incoming: { characterId: string } | null;
-  setIncoming: Dispatch<SetStateAction<{ characterId: string } | null>>;
+  incoming: { characterId: string; direction: "incoming" | "outgoing" } | null;
+  setIncoming: Dispatch<SetStateAction<{ characterId: string; direction: "incoming" | "outgoing" } | null>>;
   call: CallSession | null;
   setCall: Dispatch<SetStateAction<CallSession | null>>;
   callRef: MutableRefObject<CallSession | null>;
@@ -54,10 +55,9 @@ export function useCallControls(args: CallControlArgs): CallControls {
     args.abortCharacter(id);
 
     // ── Connect to GPU live-call WebSocket ──────────────────────────────────
-    // The session_id reuses the character id so conversation history is linked.
-    // system_prompt is built from the character personality + name.
-    const systemPrompt = `You are ${character.name}. ${character.personality}`.slice(0, 2000);
-    void callGpuCallSession(id, systemPrompt, character.voice).then((session) => {
+    // The system prompt is built server-side from the character + user profile.
+    const memory = state.memory[id] ?? [];
+    void callGpuCallSession(character, state.session?.name ?? "friend", memory).then((session) => {
       // Store the WS URL in call state — useCallSession picks it up and opens the WebSocket
       args.setCall((current) => {
         if (!current || current.characterId !== id) return current;
@@ -80,6 +80,7 @@ export function useCallControls(args: CallControlArgs): CallControls {
     const missed = Date.now() - startedAt >= (CALL_RING_SEC - 1) * 1000;
     const log: CallLog = { id: uid(), characterId: id, direction: args.incomingDirection.current, outcome: missed ? "missed" : "declined", startedAt, durationSec: 0 };
     args.setIncoming(null); args.incomingAt.current = 0; setState((state) => storeCall(state, log));
+    void releaseCallSlot();
     haptic("tap"); args.abortCharacter(id); const epoch = args.bump(id);
     args.later(() => { void args.requestEvent(id, "call_missed", epoch, false); }, 220);
   };
@@ -95,10 +96,12 @@ export function useCallControls(args: CallControlArgs): CallControls {
     // Phase is driven by the GPU WebSocket in useCallSession.
     // Just update user caption here — WS will set phase to thinking/speaking.
     args.setCall((current) => current?.characterId === id ? { ...current, user: text } : current);
-    // Note: actual sending to WS is handled by useCallSession via an exposed sendText ref.
-    // We dispatch a custom event so useCallSession can pick it up without prop-drilling.
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("cc:callText", { detail: { characterId: id, text } }));
+    if (session.wsUrl) {
+      // Live GPU socket owns the turn.
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("cc:callText", { detail: { characterId: id, text } }));
+    } else {
+      const epoch = args.bump(id);
+      void args.requestEvent(id, "call_turn", epoch, false);
     }
   };
 
@@ -111,6 +114,7 @@ export function useCallControls(args: CallControlArgs): CallControls {
     const logId = uid(); const startedAt = args.callStartedAt.current || Date.now();
     const log: CallLog = { id: logId, characterId: session.characterId, direction: args.incomingDirection.current, outcome: "answered", startedAt, durationSec: session.seconds };
     setState((state) => storeCall(state, log)); args.setCall(null); args.callRef.current = null;
+    void releaseCallSlot();
     args.nav.openSheet(forCredits ? { name: "outOfMinutes" } : { name: "callSummary", logId });
     if (!forCredits) args.later(() => {
       const epoch = args.bump(session.characterId); args.abortCharacter(session.characterId);
