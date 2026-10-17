@@ -1,7 +1,7 @@
 import { AI_REACTIONS } from "@/lib/constants";
 import { clamp, rand } from "@/lib/utils";
 import type { ChatRequest, ChatResponse, Mood, Reaction } from "@/lib/types";
-import { precheck, userAskedForCall } from "@/lib/server/safety";
+import { precheck } from "@/lib/server/safety";
 
 const MOODS: Mood[] = ["happy", "shy", "sad", "excited", "sleepy", "busy", "neutral"];
 const EMOJI = /\p{Extended_Pictographic}/gu;
@@ -33,16 +33,10 @@ export function sanitize(raw: unknown, req: ChatRequest, rawText: string): ChatR
   result.call = source.call === "ring" || source.call === "busy" ? source.call : "none";
   result.callbackInSec = typeof source.callbackInSec === "number" && Number.isFinite(source.callbackInSec) ? Math.floor(source.callbackInSec) : null;
 
-  const lastUserText = [...req.messages].reverse().find((message) => message.role === "user")?.text ?? "";
-  const askedForCall = userAskedForCall(lastUserText);
-  if (req.event === "callback_due") result.call = "ring";
-  else if ((req.callState.busyRoll || req.callState.status === "busy") && result.call === "ring") result.call = "busy";
-  if (req.event === "message" && !askedForCall && result.call === "ring") result.call = "none";
-  if (req.event !== "callback_due" && !askedForCall && result.call === "ring") result.call = "none";
-  if (askedForCall && (req.callState.busyRoll || req.callState.status === "busy") && result.call !== "ring") result.call = "busy";
-  if (result.call === "busy") {
-    result.callbackInSec = req.callState.status === "busy" ? clamp(req.callState.secondsLeft, 1, 25) : clamp(result.callbackInSec ?? rand(10, 25), 10, 25);
-  } else result.callbackInSec = null;
+  // Trust the LLM's call decision — no regex gatekeeping.
+  // Only override: busy is disabled (cleared to none), call mode cannot self-trigger a ring.
+  if (result.call === "busy") result.call = "none";
+  result.callbackInSec = null;
 
   if (req.mode === "call") {
     result.bubbles = result.bubbles.map((bubble) => stripCallText(bubble)).filter(Boolean).slice(0, 2).map((bubble) => bubble.split(/\s+/).slice(0, 25).join(" "));

@@ -19,16 +19,42 @@ export function voiceParams(description: string, gender: Gender): { pitch: numbe
   const rate = text.includes("slow") || text.includes("measured") || text.includes("calm") ? .9 : text.includes("quick") || text.includes("energetic") ? 1.08 : 1;
   return { pitch, rate };
 }
-// TODO(gpu-voice)
-export function speak(text: string, character: Pick<Character, "gender" | "voice">, handlers: { onBoundary?: () => void; onEnd?: () => void }): void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) { handlers.onEnd?.(); return; }
+let currentAudio: HTMLAudioElement | null = null;
+function browserSpeak(text: string, character: Pick<Character, "gender" | "voice">, handlers: { onBoundary?: () => void; onEnd?: () => void }): void {
+  if (!("speechSynthesis" in window)) { handlers.onEnd?.(); return; }
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text); const params = voiceParams(character.voice, character.gender);
+  const utterance = new SpeechSynthesisUtterance(text);
+  const params = voiceParams(character.voice, character.gender);
   utterance.pitch = params.pitch; utterance.rate = params.rate;
-  utterance.onboundary = () => handlers.onBoundary?.(); utterance.onend = () => handlers.onEnd?.(); utterance.onerror = () => handlers.onEnd?.();
+  utterance.onboundary = () => handlers.onBoundary?.();
+  utterance.onend = () => handlers.onEnd?.();
+  utterance.onerror = () => handlers.onEnd?.();
   window.speechSynthesis.speak(utterance);
 }
-export function stopSpeaking(): void { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel(); }
+export function speak(text: string, character: Pick<Character, "gender" | "voice">, handlers: { onBoundary?: () => void; onEnd?: () => void }): void {
+  if (typeof window === "undefined") { handlers.onEnd?.(); return; }
+  stopSpeaking();
+  // Try GPU TTS; fall back to browser synthesis on any error
+  void fetch("/api/gpu/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ voice_description: character.voice, text }),
+    signal: AbortSignal.timeout(22_000),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error("tts_fail");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; handlers.onEnd?.(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); currentAudio = null; browserSpeak(text, character, handlers); };
+    void audio.play();
+  }).catch(() => browserSpeak(text, character, handlers));
+}
+export function stopSpeaking(): void {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
 export function supportsRecognition(): boolean {
   if (typeof window === "undefined") return false;
   const browser = window as RecognitionWindow;

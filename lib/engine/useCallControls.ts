@@ -13,6 +13,7 @@ import type { CallLog, ChatEvent } from "@/lib/types";
 import { rand, uid } from "@/lib/utils";
 import { speak } from "@/lib/voice";
 import { haptic } from "@/lib/haptics";
+import { callGpuCallSession } from "@/lib/engine/api";
 
 interface CallControlArgs {
   incoming: { characterId: string } | null;
@@ -28,24 +29,51 @@ interface CallControlArgs {
   bump(id: string): number;
   abortCharacter(id: string): void;
   later(fn: () => void, ms: number): number;
-  requestEvent(id: string, event: ChatEvent, mode: "chat" | "call", epoch: number, busyRoll?: boolean, callSeconds?: number): Promise<void>;
+  // ⚠ requestEvent is ONLY for text chat events (callback_due, call_missed, call_ended).
+  // Live call turns go through the GPU WebSocket managed in useCallSession — never through Zero LLM.
+  requestEvent(id: string, event: ChatEvent, epoch: number, busyRoll?: boolean, callSeconds?: number): Promise<void>;
 }
 
 type CallControls = Pick<Engine, "answer" | "decline" | "endCall" | "callTurn" | "setMuted" | "setSpeaker">;
 export function useCallControls(args: CallControlArgs): CallControls {
   const exhausting = useRef(false);
+
   const answer = (): void => {
     const pending = args.incoming; if (!pending) return;
     const id = pending.characterId; args.setIncoming(null); args.incomingAt.current = 0;
     const state = refillIfNewDay(getState());
     setState(() => state);
     if (callSecondsLeft(state) <= 0) { args.nav.openSheet({ name: "outOfMinutes" }); return; }
-    if (!findCharacter(state, id)) return;
+    const character = findCharacter(state, id);
+    if (!character) return;
     args.callEnding.current = false; exhausting.current = false; args.callStartedAt.current = Date.now();
+
+    // Start with "connecting" phase — no wsUrl yet
     args.setCall({ characterId: id, phase: "connecting", ai: "", user: "", seconds: 0, muted: false, speaker: true, level: 0 });
-    haptic("success"); const epoch = args.bump(id); args.abortCharacter(id);
-    void args.requestEvent(id, "call_connected", "call", epoch, false, 0);
+    haptic("success");
+    args.abortCharacter(id);
+
+    // ── Connect to GPU live-call WebSocket ──────────────────────────────────
+    // The session_id reuses the character id so conversation history is linked.
+    // system_prompt is built from the character personality + name.
+    const systemPrompt = `You are ${character.name}. ${character.personality}`.slice(0, 2000);
+    void callGpuCallSession(id, systemPrompt, character.voice).then((session) => {
+      // Store the WS URL in call state — useCallSession picks it up and opens the WebSocket
+      args.setCall((current) => {
+        if (!current || current.characterId !== id) return current;
+        if (session?.ws) {
+          return { ...current, phase: "connecting", wsUrl: session.ws };
+        }
+        // GPU offline — fall back to text-mode call (phase stays "listening" after connect event)
+        return { ...current, phase: "listening", wsUrl: undefined };
+      });
+    });
+
+    // Fire call_connected as a text chat event so the companion sends a greeting message
+    const epoch = args.bump(id);
+    void args.requestEvent(id, "call_connected", epoch, false, 0);
   };
+
   const decline = (): void => {
     const pending = args.incoming; if (!pending) return;
     const id = pending.characterId; const startedAt = args.incomingAt.current || Date.now();
@@ -53,19 +81,30 @@ export function useCallControls(args: CallControlArgs): CallControls {
     const log: CallLog = { id: uid(), characterId: id, direction: args.incomingDirection.current, outcome: missed ? "missed" : "declined", startedAt, durationSec: 0 };
     args.setIncoming(null); args.incomingAt.current = 0; setState((state) => storeCall(state, log));
     haptic("tap"); args.abortCharacter(id); const epoch = args.bump(id);
-    args.later(() => { void args.requestEvent(id, "call_missed", "chat", epoch, false); }, 220);
+    args.later(() => { void args.requestEvent(id, "call_missed", epoch, false); }, 220);
   };
+
+  // callTurn: for typed text during GPU WS call — sends text to WS if connected,
+  // or speaks directly if in fallback text mode. Does NOT call Zero LLM.
   const callTurn = (rawText: string): void => {
     const session = args.callRef.current; if (!session || args.callEnding.current) return;
     const text = rawText.trim().split(/\s+/).slice(0, 25).join(" ").slice(0, 500);
     if (!text) return;
-    const id = session.characterId; setState((state) => appendMessage(state, id, newMessage("user", text), false, true));
-    args.setCall((current) => current?.characterId === id ? { ...current, phase: "thinking", user: text } : current);
-    args.abortCharacter(id); const epoch = args.bump(id);
-    void args.requestEvent(id, "call_turn", "call", epoch, false, session.seconds);
+    const id = session.characterId;
+    setState((state) => appendMessage(state, id, newMessage("user", text), false, true));
+    // Phase is driven by the GPU WebSocket in useCallSession.
+    // Just update user caption here — WS will set phase to thinking/speaking.
+    args.setCall((current) => current?.characterId === id ? { ...current, user: text } : current);
+    // Note: actual sending to WS is handled by useCallSession via an exposed sendText ref.
+    // We dispatch a custom event so useCallSession can pick it up without prop-drilling.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("cc:callText", { detail: { characterId: id, text } }));
+    }
   };
+
   const setMuted = (muted: boolean): void => args.setCall((session) => session ? { ...session, muted } : session);
   const setSpeaker = (speaker: boolean): void => args.setCall((session) => session ? { ...session, speaker } : session);
+
   const finishCall = (forCredits = false): void => {
     const session = args.callRef.current; if (!session || args.callEnding.current) return;
     args.callEnding.current = true; exhausting.current = false; sfx.hangup();
@@ -75,7 +114,7 @@ export function useCallControls(args: CallControlArgs): CallControls {
     args.nav.openSheet(forCredits ? { name: "outOfMinutes" } : { name: "callSummary", logId });
     if (!forCredits) args.later(() => {
       const epoch = args.bump(session.characterId); args.abortCharacter(session.characterId);
-      void args.requestEvent(session.characterId, "call_ended", "chat", epoch, false, session.seconds);
+      void args.requestEvent(session.characterId, "call_ended", epoch, false, session.seconds);
     }, rand(2200, 4000));
   };
   const finishRef = useRef(finishCall); finishRef.current = finishCall;

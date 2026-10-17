@@ -16,6 +16,3 @@ export function precheck(req: ChatRequest): "ok" | "crisis" | "minor" {
   return CRISIS.test(lastUser) ? "crisis" : "ok";
 }
 
-export function userAskedForCall(text: string): boolean {
-  return /\b(call me|can (?:you|we) call|let'?s (?:have a )?call|want to (?:call|talk on the phone)|phone call|voice call|ring me|give me a call)\b/i.test(text);
-}

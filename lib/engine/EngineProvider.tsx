@@ -2,18 +2,16 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
-import { DEMO_CALLBACK_SEC } from "@/lib/constants";
 import { refillIfNewDay, spendText, textsLeft } from "@/lib/credits";
 import { callChatApi } from "@/lib/engine/api";
-import { BATCH_IDLE_MS, deliveredDelay, preTypingDelay, rollBusy, seenDelay, typingDuration } from "@/lib/engine/timing";
-import { appendMessage, callsToday as countCallsToday, emptyChat, findCharacter, makeRequest, newMessage } from "@/lib/engine/engineUtils";
+import { BATCH_IDLE_MS, deliveredDelay, preTypingDelay, seenDelay, typingDuration } from "@/lib/engine/timing";
+import { appendMessage, emptyChat, findCharacter, makeRequest, newMessage } from "@/lib/engine/engineUtils";
 import { haptic } from "@/lib/haptics";
 import { useNav } from "@/lib/nav";
 import { getState, setState } from "@/lib/store";
 import { sfx } from "@/lib/sfx";
 import type { CallLog, ChatEvent, ChatResponse, Reaction } from "@/lib/types";
-import { clamp, rand } from "@/lib/utils";
-import { speak, stopSpeaking } from "@/lib/voice";
+import { stopSpeaking } from "@/lib/voice";
 import { useToast } from "@/components/ui/Toast";
 import { useCallControls } from "@/lib/engine/useCallControls";
 import type { CallSession, Engine } from "@/lib/engine/types";
@@ -25,15 +23,15 @@ type TimerCancel = () => void;
 export function EngineProvider({ children }: { children: ReactNode }): JSX.Element {
   const nav = useNav(); const { toast } = useToast();
   const [typing, setTyping] = useState<Record<string, boolean>>({});
-  const [busyUntil, setBusyUntil] = useState<Record<string, number | null>>({});
+  const [busyUntil] = useState<Record<string, number | null>>({});
   const [quickReplies, setQuickReplies] = useState<Record<string, string[]>>({});
   const [incoming, setIncoming] = useState<{ characterId: string } | null>(null);
   const [call, setCall] = useState<CallSession | null>(null);
   const busyRef = useRef<Record<string, number | null>>({}); const activeRef = useRef<string | null>(null);
   const incomingAt = useRef(0); const incomingDirection = useRef<CallLog["direction"]>("outgoing");
   const callStartedAt = useRef(0); const callEnding = useRef(false); const callRef = useRef<CallSession | null>(null);
-  const epochs = useRef(new Map<string, number>()); const rolls = useRef(new Map<string, boolean>());
-  const batches = useRef(new Map<string, number>()); const busyTimers = useRef(new Map<string, number>());
+  const epochs = useRef(new Map<string, number>());
+  const batches = useRef(new Map<string, number>());
   const controllers = useRef(new Map<string, AbortController>()); const timers = useRef(new Map<number, TimerCancel>()); const disposed = useRef(false);
   callRef.current = call;
 
@@ -48,7 +46,6 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
   });
   const bump = (id: string): number => { const next = (epochs.current.get(id) ?? 0) + 1; epochs.current.set(id, next); return next; };
   const current = (id: string, epoch: number): boolean => !disposed.current && epochs.current.get(id) === epoch;
-  const setBusy = (id: string, at: number | null) => { busyRef.current = { ...busyRef.current, [id]: at }; setBusyUntil(busyRef.current); };
   const abortCharacter = (id: string) => { controllers.current.get(id)?.abort(); controllers.current.delete(id); };
   const clearBatch = (id: string) => { const timer = batches.current.get(id); if (timer !== undefined) { cancelTimer(timer); batches.current.delete(id); } };
   const setTypingFor = (id: string, value: boolean) => setTyping((state) => ({ ...state, [id]: value }));
@@ -58,12 +55,15 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
     setState((state) => appendMessage(state, id, message, activeRef.current !== id));
     sfx.pop(); haptic("tap");
   };
-  const requestEvent = async (id: string, event: ChatEvent, mode: "chat" | "call", epoch: number, busyRoll = false, callSeconds?: number): Promise<void> => {
+  // ── Zero LLM request: ONLY for text chat mode ─────────────────────────────
+  // Call mode (voice) is handled entirely by the GPU WebSocket in useCallSession.
+  // This function must NEVER be called with mode="call" anymore.
+  const requestEvent = async (id: string, event: ChatEvent, epoch: number, busyRoll = false, callSeconds?: number): Promise<void> => {
     const state = getState(); const character = findCharacter(state, id);
     if (!character || !current(id, epoch)) return;
     const controller = new AbortController(); controllers.current.set(id, controller);
-    const remaining = mode === "chat" ? Math.max(0, Math.ceil(((busyRef.current[id] ?? 0) - Date.now()) / 1000)) : 0;
-    const req = makeRequest(state, character, id, event, mode, busyRoll, remaining, countCallsToday(state.calls), callSeconds);
+    const remaining = Math.max(0, Math.ceil(((busyRef.current[id] ?? 0) - Date.now()) / 1000));
+    const req = makeRequest(state, character, id, event, "chat", busyRoll, remaining, 0, callSeconds);
     const pending = event === "message" ? (state.chats[id]?.messages ?? []).filter((msg) => msg.role === "user" && msg.status === "sent").map((msg) => msg.id) : [];
     const responsePromise = callChatApi(req, controller.signal);
     if (pending.length && await delay(deliveredDelay()) && current(id, epoch)) setState((currentState) => {
@@ -77,21 +77,6 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
       const chat = currentState.chats[id]; if (!chat) return currentState;
       return { ...currentState, chats: { ...currentState.chats, [id]: { ...chat, messages: chat.messages.map((msg) => pending.includes(msg.id) ? { ...msg, status: "seen" } : msg) } } };
     });
-    if (mode === "call") {
-      const line = response.bubbles.join(" ").replace(/\p{Extended_Pictographic}/gu, "").replace(/[*_`>#]/g, "").trim() || "i’m here with you.";
-      const character = findCharacter(getState(), id);
-      if (!character || !current(id, epoch)) return;
-      setState((state) => appendMessage(state, id, newMessage("assistant", line)));
-      setCall((session) => session?.characterId === id ? { ...session, phase: "speaking", ai: line } : session);
-      if (response.memory.length) setState((state) => {
-        const memory = state.memory[id] ?? [];
-        return { ...state, memory: { ...state.memory, [id]: [...new Set([...memory, ...response.memory])].slice(0, 12) } };
-      });
-      if (response.safety === "minor") nav.openSheet({ name: "minorGate" });
-      if (response.safety === "crisis") nav.openSheet({ name: "safety" });
-      speak(line, character, { onEnd: () => setCall((session) => session?.characterId === id ? { ...session, phase: "listening" } : session) });
-      return;
-    }
     await applyResponse(id, response, event, epoch, pending.at(-1));
   };
 
@@ -130,19 +115,6 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
     }
     if (response.safety === "minor") nav.openSheet({ name: "minorGate" });
     if (response.safety === "crisis") nav.openSheet({ name: "safety" });
-    if (response.call === "busy") {
-      const existing = busyRef.current[id] ?? 0;
-      if (existing <= Date.now()) {
-        const seconds = clamp(response.callbackInSec ?? rand(DEMO_CALLBACK_SEC[0], DEMO_CALLBACK_SEC[1]), DEMO_CALLBACK_SEC[0], DEMO_CALLBACK_SEC[1]);
-        const until = Date.now() + seconds * 1000;
-        setBusy(id, until);
-        const timer = later(() => {
-          busyTimers.current.delete(id); setBusy(id, null); abortCharacter(id);
-          const nextEpoch = bump(id); void requestEvent(id, "callback_due", "chat", nextEpoch, false);
-        }, seconds * 1000);
-        busyTimers.current.set(id, timer);
-      }
-    }
     if (response.call === "ring") {
       incomingDirection.current = event === "callback_due" ? "incoming" : "outgoing";
       incomingAt.current = Date.now(); setIncoming({ characterId: id });
@@ -185,15 +157,10 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
     const kind = opts.kind ?? "text";
     const message = newMessage("user", kind === "voice" ? "Voice note" : text, kind, opts.durationSec);
     setState((state) => appendMessage(spendText(state), id, { ...message, status: "sent" }, false, true));
-    if (/\b(call me|can you call|let'?s (?:have a )?call|voice call|phone call|ring me|give me a call)\b/i.test(text)) {
-      const today = countCallsToday(snapshot.calls); const firstEver = !snapshot.calls.some((entry) => entry.characterId === id);
-      rolls.current.set(id, rollBusy(today, firstEver));
-    }
     const epoch = bump(id); abortCharacter(id); setTypingFor(id, false); clearBatch(id);
     const timer = later(() => {
       batches.current.delete(id);
-      const busyRoll = rolls.current.get(id) ?? false; rolls.current.delete(id);
-      void requestEvent(id, "message", "chat", epoch, busyRoll);
+      void requestEvent(id, "message", epoch, false);
     }, BATCH_IDLE_MS);
     batches.current.set(id, timer);
   };
@@ -218,6 +185,22 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
     bump, abortCharacter, later, requestEvent,
   });
 
+  // ── GPU WebSocket → call state bridge ─────────────────────────────────────
+  // useCallSession dispatches these events to update call phase/AI text without prop-drilling.
+  useEffect(() => {
+    const onPhase = (e: Event) => {
+      const { characterId, phase } = (e as CustomEvent<{ characterId: string; phase: string }>).detail;
+      setCall((session) => session?.characterId === characterId ? { ...session, phase: phase as import("@/lib/engine/types").CallPhase } : session);
+    };
+    const onAi = (e: Event) => {
+      const { characterId, text } = (e as CustomEvent<{ characterId: string; text: string }>).detail;
+      setCall((session) => session?.characterId === characterId ? { ...session, ai: text, phase: "speaking" } : session);
+    };
+    window.addEventListener("cc:callPhase", onPhase);
+    window.addEventListener("cc:callAi", onAi);
+    return () => { window.removeEventListener("cc:callPhase", onPhase); window.removeEventListener("cc:callAi", onAi); };
+  }, []);
+
   useEffect(() => {
     disposed.current = false;
     return () => {
@@ -225,6 +208,7 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
       for (const cancel of timers.current.values()) cancel();
       timers.current.clear(); controllers.current.forEach((controller) => controller.abort()); controllers.current.clear();
       stopSpeaking();
+
     };
   }, []);
 

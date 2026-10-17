@@ -27,7 +27,7 @@ export function CallsScreen(): React.JSX.Element {
   }, [state.calls]);
   const timeLabel = (ts: number) => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(ts);
   const callBack = (log: CallLog) => { startChat(log.characterId); requestCall(log.characterId); nav.push({ name: "chat", characterId: log.characterId }); };
-  return <main className="absolute inset-0 flex flex-col overflow-hidden px-5 pb-[105px] pt-[max(26px,env(safe-area-inset-top))]"><div className="mesh-bg"/><header className="shrink-0"><p className="text-xs font-bold uppercase tracking-[.14em] text-choc-soft">little moments together</p><h1 className="mt-1 font-display text-3xl font-bold">Calls</h1><p className="mt-1 text-sm text-choc-soft">A quiet log of conversations you shared.</p></header>
+  return <main className="absolute inset-0 flex flex-col overflow-hidden px-5 pb-[105px] pt-[max(26px,env(safe-area-inset-top))]"><div className="mesh-bg"/><header className="shrink-0"><h1 className="font-display text-[27px] font-bold">Calls</h1><p className="mt-1 text-sm text-choc-soft">A quiet log of conversations you shared.</p></header>
     <section className="no-scrollbar mt-5 flex-1 overflow-y-auto pb-3">{groups.length === 0 ? <EmptyState mood="sleep" title="No calls just yet" body="When you and a companion talk, you&apos;ll find the little details here."/> : groups.map((group) => <div key={group.label} className="mb-5"><h2 className="mb-2 font-display text-lg font-bold">{group.label}</h2>{group.calls.map((log) => {
       const character = findCharacter(state, log.characterId); if (!character) return null;
       const missed = log.outcome !== "answered"; const Icon = missed ? PhoneMissed : log.direction === "incoming" ? PhoneIncoming : PhoneOutgoing;

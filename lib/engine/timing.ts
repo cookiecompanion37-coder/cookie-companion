@@ -7,4 +7,4 @@ export function preTypingDelay(isFirst: boolean): number { return isFirst ? rand
 export function typingDuration(text: string, isFirst: boolean): number {
   return isFirst ? clamp(500 + text.length * 35, 700, 2800) : clamp(300 + text.length * 25, 500, 1800);
 }
-export function rollBusy(_callsToday: number, firstEver: boolean): boolean { return firstEver || Math.random() < .55; }
+export function rollBusy(_callsToday: number, _firstEver: boolean): boolean { return false; }

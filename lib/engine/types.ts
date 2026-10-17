@@ -1,7 +1,18 @@
 import type { Reaction } from "@/lib/types";
 
 export type CallPhase = "connecting" | "listening" | "thinking" | "speaking";
-export interface CallSession { characterId: string; phase: CallPhase; ai: string; user: string; seconds: number; muted: boolean; speaker: boolean; level: number; }
+export interface CallSession {
+  characterId: string;
+  phase: CallPhase;
+  ai: string;
+  user: string;
+  seconds: number;
+  muted: boolean;
+  speaker: boolean;
+  level: number;
+  /** GPU live-call WebSocket URL — set after callGpuCallSession resolves. Undefined = GPU offline, falling back to text mode. */
+  wsUrl?: string;
+}
 export interface Engine {
   typing: Record<string, boolean>;
   busyUntil: Record<string, number | null>;
