@@ -3,7 +3,7 @@
 // Returns JSON: { session_id, transcript, reply: { text, emoji, audio_path }, reaction }
 // audio_path is rewritten to absolute BASE URL so client can fetch directly.
 import { NextResponse } from "next/server";
-import { getGpuUrl } from "@/lib/gpu";
+import { getGpuUrl } from "@/lib/server/gpu";
 
 function err(msg: string, status = 500) { return NextResponse.json({ error: msg }, { status }); }
 

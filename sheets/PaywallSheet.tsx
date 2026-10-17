@@ -11,23 +11,67 @@ import { useToast } from "@/components/ui/Toast";
 import type { PlanId } from "@/lib/types";
 
 export function PaywallSheet(): React.JSX.Element {
-  const nav = useNav(); const { toast } = useToast(); const [annual, setAnnual] = useState(false);
+  const nav = useNav();
+  const { toast } = useToast();
+  const [annual, setAnnual] = useState(false);
   const purchase = (plan: PlanId) => {
-    // TODO(supabase)
-    setState((current) => ({ ...current, plan })); toast(`${PLANS[plan].name} is ready to explore`, "🍪"); nav.closeSheet();
+    setState((current) => ({ ...current, plan }));
+    toast(`${PLANS[plan].name} is ready to explore`, "🍪");
+    nav.closeSheet();
   };
   const buyPack = (minutes: number) => { setState((current) => ({ ...current, credits: { ...current.credits, packCallSeconds: current.credits.packCallSeconds + minutes * 60 } })); toast(`${minutes} call minutes added`, "📞"); };
-  return <div className="pb-3"><div className="flex flex-col items-center text-center"><Cookie size={76} mood="blush" bites={2}/><h2 className="mt-1 font-display text-2xl font-bold">A little more room?</h2><p className="mt-1 max-w-xs text-sm text-choc-soft">Pick the pace that feels right for you.</p></div>
-    <div className="mx-auto mt-4 flex w-fit rounded-full bg-cream-2 p-1"><button type="button" onClick={() => setAnnual(false)} className={`min-h-11 rounded-full px-4 text-sm font-bold ${!annual ? "bg-white shadow" : "text-choc-soft"}`}>Monthly</button><button type="button" onClick={() => setAnnual(true)} className={`min-h-11 rounded-full px-4 text-sm font-bold ${annual ? "bg-white shadow" : "text-choc-soft"}`}>Annual · save ~40%</button></div>
-    <div className="mt-4 space-y-3">{(["plus", "max"] as PlanId[]).map((plan) => {
-      const details = PLANS[plan]; const price = annual ? details.priceAnnual : details.priceMonthly;
-      return <div key={plan} className={`relative rounded-[24px] border p-4 ${plan === "plus" ? "border-transparent shadow-[0_16px_32px_-20px_rgba(206,115,172,.55)] [background:linear-gradient(150deg,#fff6e8,#ffe9f3_55%,#efe9ff)]" : "border-white/80 bg-white/65"}`}>
-        {plan === "plus" && <span className="absolute -top-3 right-4 rounded-full px-3 py-1 text-[10px] font-bold text-choc shadow [background:linear-gradient(135deg,#ffd9a6,#ffb3d1_50%,#c9b0ff)]">Most popular</span>}
-        <div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-white/75">{plan === "plus" ? <Heart size={18} className="text-pink"/> : <Crown size={18} className="text-biscuit-deep"/>}</span><div><h3 className="font-display text-lg font-bold">{details.name}</h3><p className="text-xs text-choc-soft">{plan === "plus" ? "For more everyday moments" : "For your most curious days"}</p></div></div><p className="font-display text-xl font-bold">${price.toFixed(2)}<span className="text-xs font-medium text-choc-soft">/{annual ? "yr" : "mo"}</span></p></div>
-        <ul className="mt-3 space-y-1">{details.perks.map((perk) => <li key={perk} className="flex items-center gap-2 text-xs text-choc-soft"><Check size={14} className="text-ok"/>{perk}</li>)}</ul><Button full size="sm" className="mt-3" onClick={() => purchase(plan)}>Choose {details.name}</Button>
-      </div>;
-    })}</div>
-    <div className="mt-5"><h3 className="font-display text-lg font-bold">Call minutes that never expire</h3><div className="mt-2 grid grid-cols-3 gap-2">{PACKS.map((pack) => <button key={pack.minutes} type="button" onClick={() => buyPack(pack.minutes)} className="clay rounded-[18px] p-3 text-center"><span className="block font-display font-bold">{pack.minutes} min</span><span className="text-xs text-choc-soft">${pack.price.toFixed(2)}</span></button>)}</div></div>
-    <button type="button" onClick={() => toast("There are no purchases to restore yet", "🍪")} className="mt-4 min-h-11 w-full text-sm font-bold text-choc-soft">Restore purchase</button><p className="text-center text-[10px] text-choc-soft/75">Regional pricing applied · mock purchases for this preview</p><p className="mt-1 text-center text-[10px] text-choc-soft/75"><Sparkles size={10} className="mr-1 inline"/>No pressure — choose what works for you.</p>
-  </div>;
+
+  return (
+    <div className="pb-2">
+      <div className="flex items-center gap-3 rounded-[20px] bg-[#fff0f4] p-3.5">
+        <Cookie size={58} mood="blush" bites={2} />
+        <div className="flex-1">
+          <h2 className="font-display text-[17px] font-semibold text-[#34101d]">A little more room?</h2>
+          <p className="text-[10.5px] leading-snug text-[#8a596b]">Pick the pace that feels right for you.</p>
+        </div>
+      </div>
+
+      <div className="mx-auto mt-4 flex w-fit rounded-full bg-[#f6e6ec] p-1">
+        <button type="button" onClick={() => setAnnual(false)} className={`min-h-9 rounded-full px-4 text-[11px] font-bold ${!annual ? "bg-white text-[#34101d] shadow" : "text-[#8a596b]"}`}>Monthly</button>
+        <button type="button" onClick={() => setAnnual(true)} className={`min-h-9 rounded-full px-4 text-[11px] font-bold ${annual ? "bg-white text-[#34101d] shadow" : "text-[#8a596b]"}`}>Annual · save 40%</button>
+      </div>
+
+      <div className="mt-4 space-y-2.5">
+        {(["plus", "max"] as PlanId[]).map((plan) => {
+          const details = PLANS[plan];
+          const price = annual ? details.priceAnnual : details.priceMonthly;
+          return (
+            <div key={plan} className={`relative rounded-[22px] border p-3.5 ${plan === "plus" ? "border-transparent bg-[linear-gradient(150deg,#fff3f7,#ffe1ec_55%,#f1e8ff)] shadow-[0_16px_30px_-20px_rgba(206,115,172,.6)]" : "border-white/80 bg-white/60"}`}>
+              {plan === "plus" && <span className="absolute -top-2.5 right-3 rounded-full brand-gradient px-2.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-white shadow">most loved</span>}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-9 w-9 place-items-center rounded-[12px] bg-white/80">{plan === "plus" ? <Heart size={16} className="text-[#f5286e]" /> : <Crown size={16} className="text-[#dd9440]" />}</span>
+                  <div>
+                    <h3 className="font-display text-[16px] font-semibold text-[#34101d]">{details.name}</h3>
+                    <p className="text-[9.5px] text-[#8a596b]">{plan === "plus" ? "for everyday moments" : "for your most curious days"}</p>
+                  </div>
+                </div>
+                <p className="font-display text-[19px] font-semibold text-[#34101d]">${price.toFixed(2)}<span className="text-[9px] font-medium text-[#8a596b]">/{annual ? "yr" : "mo"}</span></p>
+              </div>
+              <ul className="mt-2 space-y-0.5">{details.perks.map((perk) => <li key={perk} className="flex items-center gap-1.5 text-[10.5px] text-[#8a596b]"><Check size={11} className="text-[#45b98a]" />{perk}</li>)}</ul>
+              <Button full size="sm" className="mt-2.5" onClick={() => purchase(plan)}><Sparkles size={13} />Choose {details.name}</Button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4">
+        <h3 className="font-display text-[14px] font-semibold text-[#34101d]">Call minutes that never expire</h3>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {PACKS.map((pack) => (
+            <button key={pack.minutes} type="button" onClick={() => buyPack(pack.minutes)} className="press rounded-[16px] border border-white/70 bg-white/60 p-2.5 text-center">
+              <span className="block font-display text-[13px] font-semibold text-[#34101d]">{pack.minutes} min</span>
+              <span className="text-[10px] text-[#8a596b]">${pack.price.toFixed(2)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="mt-3 text-center text-[9px] leading-relaxed text-[#a97c8b]">Demo billing only — plans unlock instantly on this device. No payment is taken.</p>
+    </div>
+  );
 }

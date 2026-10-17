@@ -1,7 +1,7 @@
 // /api/gpu/tts — server-side proxy for GPU /v1/voice-preview
 // Keeps the GPU URL off the client; returns raw WAV bytes.
 import { NextResponse } from "next/server";
-import { getGpuUrl } from "@/lib/gpu";
+import { getGpuUrl } from "@/lib/server/gpu";
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {

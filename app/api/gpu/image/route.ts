@@ -1,7 +1,7 @@
 // /api/gpu/image — server-side proxy for GPU image analysis and image generation
 // POST with { action: "analyze", ... } or { action: "generate", ... } or { action: "poll", ... }
 import { NextResponse } from "next/server";
-import { getGpuUrl } from "@/lib/gpu";
+import { getGpuUrl } from "@/lib/server/gpu";
 
 function err(msg: string, status = 500) { return NextResponse.json({ error: msg }, { status }); }
 
