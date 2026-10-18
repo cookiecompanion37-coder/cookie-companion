@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Cookie" },
   icons: { icon: "/cookie-icon.png", apple: "/cookie-logo.png" },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, maximumScale: 1, viewportFit: "cover", themeColor: "#FFE9F0", interactiveWidget: "resizes-content" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#fff5f7", interactiveWidget: "resizes-content" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>): React.JSX.Element {
   return <html lang="en" className={`${fredoka.variable} ${nunito.variable}`}><body>{children}</body></html>;

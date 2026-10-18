@@ -16,8 +16,9 @@ function extractContent(payload: ProviderPayload): string {
 }
 
 export async function callLLM(messages: ProviderMessage[], opts: CallOptions = {}): Promise<string | null> {
-  const base = (process.env.ZERO_BASE_URL ?? "https://bflqlfkmfwrtgftvywce.supabase.co/functions/v1/router/v1").replace(/\/+$/, "");
-  const key = process.env.ZERO_API_KEY ?? "zerolabs-router-key";
+  const base = (process.env.ZERO_BASE_URL ?? "").replace(/\/+$/, "");
+  const key = process.env.ZERO_API_KEY;
+  if (!base || !key) return null;
   const model = process.env.ZERO_MODEL ?? "zero-pro-1.2";
   const endpoint = `${base}/chat/completions`;
   const request = async (maxTokens: number): Promise<string | null> => {

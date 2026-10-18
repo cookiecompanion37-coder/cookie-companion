@@ -4,14 +4,13 @@ import { useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { CALL_RING_SEC } from "@/lib/constants";
 import { callSecondsLeft, refillIfNewDay, spendCallSeconds } from "@/lib/credits";
-import { appendMessage, findCharacter, newMessage, storeCall } from "@/lib/engine/engineUtils";
+import { findCharacter, storeCall } from "@/lib/engine/engineUtils";
 import type { CallSession, Engine } from "@/lib/engine/types";
 import type { Nav } from "@/lib/nav";
 import { getState, setState } from "@/lib/store";
 import { sfx } from "@/lib/sfx";
 import type { CallLog, ChatEvent } from "@/lib/types";
 import { rand, uid } from "@/lib/utils";
-import { speak } from "@/lib/voice";
 import { haptic } from "@/lib/haptics";
 import { callGpuCallSession } from "@/lib/engine/api";
 import { releaseCallSlot } from "@/lib/callsClient";
@@ -38,6 +37,7 @@ interface CallControlArgs {
 type CallControls = Pick<Engine, "answer" | "decline" | "endCall" | "callTurn" | "setMuted" | "setSpeaker">;
 export function useCallControls(args: CallControlArgs): CallControls {
   const exhausting = useRef(false);
+  const connectionEpoch = useRef(0);
 
   const answer = (): void => {
     const pending = args.incoming; if (!pending) return;
@@ -56,22 +56,21 @@ export function useCallControls(args: CallControlArgs): CallControls {
 
     // ── Connect to GPU live-call WebSocket ──────────────────────────────────
     // The system prompt is built server-side from the character + user profile.
+    const epoch = ++connectionEpoch.current;
     const memory = state.memory[id] ?? [];
     void callGpuCallSession(character, state.session?.name ?? "friend", memory).then((session) => {
       // Store the WS URL in call state — useCallSession picks it up and opens the WebSocket
       args.setCall((current) => {
-        if (!current || current.characterId !== id) return current;
+        if (!current || current.characterId !== id || connectionEpoch.current !== epoch) return current;
         if (session?.ws) {
           return { ...current, phase: "connecting", wsUrl: session.ws };
         }
         // GPU offline — fall back to text-mode call (phase stays "listening" after connect event)
-        return { ...current, phase: "listening", wsUrl: undefined };
+        return { ...current, phase: "listening", wsUrl: undefined, ai: "Voice service is unavailable. Please end the call and try again shortly." };
       });
     });
 
-    // Fire call_connected as a text chat event so the companion sends a greeting message
-    const epoch = args.bump(id);
-    void args.requestEvent(id, "call_connected", epoch, false, 0);
+    args.bump(id);
   };
 
   const decline = (): void => {
@@ -85,14 +84,13 @@ export function useCallControls(args: CallControlArgs): CallControls {
     args.later(() => { void args.requestEvent(id, "call_missed", epoch, false); }, 220);
   };
 
-  // callTurn: for typed text during GPU WS call — sends text to WS if connected,
-  // or speaks directly if in fallback text mode. Does NOT call Zero LLM.
+  // Live call turns stay on the call transport and never enter chat history.
   const callTurn = (rawText: string): void => {
     const session = args.callRef.current; if (!session || args.callEnding.current) return;
     const text = rawText.trim().split(/\s+/).slice(0, 25).join(" ").slice(0, 500);
     if (!text) return;
     const id = session.characterId;
-    setState((state) => appendMessage(state, id, newMessage("user", text), false, true));
+
     // Phase is driven by the GPU WebSocket in useCallSession.
     // Just update user caption here — WS will set phase to thinking/speaking.
     args.setCall((current) => current?.characterId === id ? { ...current, user: text } : current);
@@ -100,8 +98,9 @@ export function useCallControls(args: CallControlArgs): CallControls {
       // Live GPU socket owns the turn.
       if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("cc:callText", { detail: { characterId: id, text } }));
     } else {
-      const epoch = args.bump(id);
-      void args.requestEvent(id, "call_turn", epoch, false);
+      args.setCall((current) => current?.characterId === id
+        ? { ...current, ai: "Voice service is unavailable. Please end the call and try again shortly." }
+        : current);
     }
   };
 
@@ -110,7 +109,7 @@ export function useCallControls(args: CallControlArgs): CallControls {
 
   const finishCall = (forCredits = false): void => {
     const session = args.callRef.current; if (!session || args.callEnding.current) return;
-    args.callEnding.current = true; exhausting.current = false; sfx.hangup();
+    args.callEnding.current = true; connectionEpoch.current += 1; exhausting.current = false; sfx.hangup();
     const logId = uid(); const startedAt = args.callStartedAt.current || Date.now();
     const log: CallLog = { id: logId, characterId: session.characterId, direction: args.incomingDirection.current, outcome: "answered", startedAt, durationSec: session.seconds };
     setState((state) => storeCall(state, log)); args.setCall(null); args.callRef.current = null;
@@ -127,14 +126,14 @@ export function useCallControls(args: CallControlArgs): CallControls {
     if (!args.call) return;
     const characterId = args.call.characterId;
     const ticker = window.setInterval(() => {
-      if (args.callEnding.current || exhausting.current) return;
+      if (args.callEnding.current || exhausting.current || !args.callRef.current?.wsUrl || args.callRef.current.phase === "connecting") return;
       const state = getState();
       if (callSecondsLeft(state) <= 0) {
         const character = findCharacter(state, characterId);
         if (!character) { finishRef.current(true); return; }
         exhausting.current = true;
         args.setCall((session) => session?.characterId === characterId ? { ...session, phase: "speaking", ai: "i should let you get back to your day. talk soon 💛" } : session);
-        speak("i should let you get back to your day. talk soon.", character, { onEnd: () => undefined });
+
         window.clearInterval(ticker); args.later(() => finishRef.current(true), 1700);
         return;
       }

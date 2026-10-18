@@ -9,14 +9,14 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 export function Button({ variant = "candy", size = "md", full = false, className, onClick, ...props }: ButtonProps): React.JSX.Element {
   const variants = {
-    candy: "text-white brand-gradient border border-white/25 shadow-[0_14px_30px_-14px_rgba(214,18,83,.75)] hover:brightness-105",
+    candy: "text-white brand-gradient border border-transparent hover:brightness-105",
     soft: "card text-ink border border-white/80",
     ghost: "bg-transparent text-[color:var(--ink-soft)]",
     dark: "bg-ink text-white border border-white/10 shadow-lg",
     danger: "bg-[#e5395c] text-white shadow-[0_12px_26px_-14px_rgba(229,57,92,.8)]",
   };
   const sizes = { sm: "min-h-10 px-4 text-[13px]", md: "min-h-12 px-5 text-[15px]", lg: "min-h-14 px-6 text-[16px]" };
-  return <button {...props} className={cn("press inline-flex items-center justify-center gap-2 rounded-full font-display font-semibold tracking-[0.01em] disabled:opacity-45", variants[variant], sizes[size], full && "w-full", className)} onClick={(event) => { haptic("tap"); onClick?.(event); }} />;
+  return <button {...props} className={cn("press inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold tracking-[0.01em] disabled:opacity-45", variants[variant], sizes[size], full && "w-full", className)} onClick={(event) => { haptic("tap"); onClick?.(event); }} />;
 }
 
 export function Chip({

@@ -1,14 +1,15 @@
 // GPU server client — fetches live Cloudflare tunnel URL from Supabase and wraps all 5 GPU routes.
 // The URL rotates on every Kaggle session; always resolve before each request.
 
-const SB = process.env.GPU_NODE_SUPABASE_URL ?? "https://xiwpzkuuoiwwwkrbphbp.supabase.co";
-const AK = process.env.GPU_NODE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhpd3B6a3V1b2l3d3drcmJwaGJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxOTU5MTksImV4cCI6MjEwNzc3MTkxOX0.xSZfM1IYdkefsIihLv74N3-wVvt4rlOSMbIgMepvLlI";
+const SB = process.env.GPU_NODE_SUPABASE_URL ?? "";
+const AK = process.env.GPU_NODE_SUPABASE_ANON_KEY ?? "";
 
 let cachedUrl: string | null = null;
 let cacheExpiry = 0;
 
 /** Returns the live GPU base URL, cached for 60 s. Returns null if server is between sessions. */
 export async function getGpuUrl(): Promise<string | null> {
+  if (!SB || !AK) return null;
   if (Date.now() < cacheExpiry && cachedUrl !== undefined) return cachedUrl;
   try {
     const r = await fetch(
