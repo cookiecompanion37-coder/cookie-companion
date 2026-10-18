@@ -7,7 +7,7 @@ import { Cookie } from "@/components/ui/Cookie";
 import { CRISIS_RESOURCES, INTERESTS, VIBES } from "@/lib/constants";
 import { useToast } from "@/components/ui/Toast";
 import { useNav } from "@/lib/nav";
-import { resetAll, setState, useAppState } from "@/lib/store";
+import { resetAll, setState, signOut, useAppState } from "@/lib/store";
 
 const REPORT_REASONS = ["Inappropriate content", "Impersonation", "Harassment", "Something else"];
 export function ReportSheet({ characterId }: { characterId?: string }): React.JSX.Element {
@@ -48,13 +48,15 @@ export function OutOfMinutesSheet(): React.JSX.Element {
 
 export function DeleteDataSheet(): React.JSX.Element {
   const nav = useNav();
-  const erase = () => { resetAll(); nav.closeSheet(); nav.setTab("chats"); };
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const erase = async () => { setBusy(true); try { await resetAll(); nav.closeSheet(); nav.setTab("chats"); } catch { toast("Could not delete saved data. Please try again."); } finally { setBusy(false); } };
   return (
     <div className="flex flex-col items-center pb-2 text-center">
       <span className="grid h-12 w-12 place-items-center rounded-full bg-[#ffe3e8] text-[#e5395c]"><Trash2 size={21} /></span>
       <h2 className="mt-3 font-display text-[19px] font-semibold text-[#34101d]">Delete all your data?</h2>
-      <p className="mt-1.5 max-w-[280px] text-[12px] leading-relaxed text-[#8a596b]">This removes your local chats, companions, memories, settings, and call history from this device. You can start fresh any time.</p>
-      <Button full variant="danger" className="mt-4" onClick={erase}>Delete everything</Button>
+      <p className="mt-1.5 max-w-[280px] text-[12px] leading-relaxed text-[#8a596b]">This permanently removes your saved chats, private companions, diary, memories, settings, and call history from your account, then signs you out. Your login and previously shared public content remain.</p>
+      <Button full variant="danger" className="mt-4" disabled={busy} onClick={() => void erase()}>{busy ? "Deleting…" : "Delete saved data"}</Button>
       <button type="button" onClick={() => nav.closeSheet()} className="mt-2 min-h-10 text-[11px] font-bold text-[#8a596b]">Keep my data</button>
     </div>
   );
@@ -62,7 +64,7 @@ export function DeleteDataSheet(): React.JSX.Element {
 
 export function MinorGateSheet(): React.JSX.Element {
   const nav = useNav();
-  const leave = () => { resetAll(); nav.closeSheet(); nav.setTab("chats"); };
+  const leave = () => { void signOut().then(() => { nav.closeSheet(); nav.setTab("chats"); }); };
   return (
     <div className="flex flex-col items-center pb-2 text-center">
       <Cookie size={86} mood="sad" bites={1} />

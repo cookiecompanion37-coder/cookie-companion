@@ -345,7 +345,7 @@ export function EngineProvider({ children }: { children: ReactNode }): JSX.Eleme
       if (callRef.current) { await releaseCallSlot(); return; }
       if (free) {
         ringNow(id, "outgoing");
-        send(id, "can you call me?");
+
         return;
       }
       const snapshot = getState();

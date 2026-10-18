@@ -19,11 +19,7 @@ export function ActiveCall(): React.JSX.Element | null {
   const session = useCallSession();
   const [caption, setCaption] = useState("");
   const character = call ? findCharacter(state, call.characterId) : undefined;
-  const startedAt = call ? Date.now() - call.seconds * 1000 : 0;
-  const lastAiMessage = call
-    ? [...(state.chats[call.characterId]?.messages ?? [])].reverse().find((message) => message.role === "assistant" && message.text && message.ts >= startedAt - 2500)
-    : undefined;
-  const spoken = call?.ai || lastAiMessage?.text || "";
+  const spoken = call?.ai || "";
 
   useEffect(() => {
     if (!spoken) { setCaption(""); return; }

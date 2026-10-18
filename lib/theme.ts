@@ -15,6 +15,7 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: "dusk", name: "Dusk", note: "lilac evening glow", swatch: ["#eddfff", "#ffc9df", "#ffb690"] },
   { id: "matcha", name: "Matcha", note: "calm green tea", swatch: ["#eef9ea", "#cdeed6", "#ffd2e1"] },
   { id: "peach", name: "Peach", note: "warm sunset", swatch: ["#fff0e2", "#ffcab0", "#ff9fc2"] },
+  { id: "midnight", name: "Midnight", note: "deep cozy dark", swatch: ["#2a0d22", "#4a1236", "#6d1a45"], dark: true },
 ];
 
 export const DEFAULT_WALLPAPER: WallpaperId = "sakura";

@@ -26,10 +26,11 @@ function readImage(value: unknown, req: ChatRequest): GeneratedImagePlan | null 
 export function sanitize(raw: unknown, req: ChatRequest, rawText: string): ChatResponse {
   const source = isRecord(raw) ? raw : {};
   const result = defaults();
-  const fallbackText = shortText(rawText, 220);
+  const looksStructured = /^[\s`]*[\[{]/.test(rawText) || /<(?:tool_call|function_call)|"(?:tool_calls|function_call|arguments)"\s*:/i.test(rawText);
+  const fallbackText = looksStructured ? "" : shortText(rawText, 220);
   const incoming = Array.isArray(source.bubbles) ? source.bubbles : fallbackText ? [fallbackText] : [];
   const maxBubbles = req.mode === "call" ? 2 : 3;
-  result.bubbles = incoming.map((entry) => shortText(entry, 240)).filter(Boolean).slice(0, maxBubbles);
+  result.bubbles = incoming.map((entry) => shortText(entry, 240)).filter((entry) => Boolean(entry) && !/^(?:```|\s*\{)|<(?:tool_call|function_call)|"tool_calls"\s*:/i.test(entry)).slice(0, maxBubbles);
   if (result.bubbles.length === 0) result.bubbles = [req.mode === "call" ? "i'm here with you." : "i'm here — tell me a little more?"];
 
   const rawReaction = source.reaction;

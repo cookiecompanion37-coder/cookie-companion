@@ -7,27 +7,28 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * third-party auth, no session table, no per-request database read — which is
  * exactly what a low-traffic internal panel needs on a free tier.
  *
- * Set ADMIN_EMAIL / ADMIN_PASSCODE / ADMIN_SECRET in production. The defaults
- * exist so the panel is usable in a fresh clone and are called out in the UI.
+ * Access stays disabled until explicit credentials and a strong signing secret
+ * are configured. No development credentials are accepted in production.
  */
 
 export const ADMIN_COOKIE = "cookie_admin";
 const SESSION_HOURS = 12;
 
 export function adminEmail(): string {
-  return (process.env.ADMIN_EMAIL ?? "admin@cookie.app").trim().toLowerCase();
+  return (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
 }
 
 export function adminPasscode(): string {
-  return process.env.ADMIN_PASSCODE ?? "cookie-admin";
+  return process.env.ADMIN_PASSCODE ?? "";
 }
 
 export function adminDefaults(): boolean {
-  return !process.env.ADMIN_PASSCODE || !process.env.ADMIN_EMAIL;
+  return !process.env.ADMIN_PASSCODE || !process.env.ADMIN_EMAIL || (process.env.ADMIN_SECRET?.length ?? 0) < 32;
 }
 
 function secret(): string {
-  return process.env.ADMIN_SECRET ?? process.env.CRON_SECRET ?? "cookie-dev-admin-secret";
+  if (adminDefaults()) throw new Error("Admin credentials and a 32-character ADMIN_SECRET must be configured.");
+  return process.env.ADMIN_SECRET!;
 }
 
 function sign(value: string): string {
@@ -41,7 +42,7 @@ export function createAdminToken(email: string): string {
 }
 
 export function verifyAdminToken(token: string | undefined | null): { email: string } | null {
-  if (!token) return null;
+  if (!token || adminDefaults()) return null;
   const [encoded, signature] = token.split(".");
   if (!encoded || !signature) return null;
   let payload: string;
@@ -89,6 +90,7 @@ export function clearAdminCookie(): string {
 
 /** Only compare after normalising; avoids leaking which half failed. */
 export function checkCredentials(email: string, passcode: string): boolean {
+  if (adminDefaults()) return false;
   const emailOk = email.trim().toLowerCase() === adminEmail();
   const expected = Buffer.from(adminPasscode());
   const given = Buffer.from(passcode);

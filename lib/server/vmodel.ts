@@ -1,4 +1,5 @@
 import type { AspectId } from "@/lib/types";
+import { photographyPrompt } from "@/lib/eternal-engine/photography";
 
 const API = process.env.VMODEL_BASE_URL ?? "https://api.vmodel.ai";
 export const VMODEL_VERSION = process.env.VMODEL_VERSION ?? "cce611c44553ba5f061813d75a1e5f93d8c901047528da275f667ebe7d784565";
@@ -12,13 +13,10 @@ export interface TaskResult {
 
 export function vmodelReady(): boolean { return Boolean(process.env.VMODEL_API_TOKEN); }
 
-/** Universal photoreal template — the model only writes the scene; this keeps output consistent. */
-const PHOTO_TEMPLATE = "photorealistic candid smartphone photo, natural skin texture, soft window light, shallow depth of field, 35mm, authentic instagram aesthetic, relaxed friendly expression, vertical framing, no text, no watermark";
 export const ASPECTS: AspectId[] = ["4:5", "3:4", "1:1", "9:16"];
 
 export function buildPhotoPrompt(scene: string, appearance: string, aspect: AspectId): string {
-  const framing = aspect === "9:16" ? "full-body framing" : aspect === "1:1" ? "square crop" : "waist-up framing";
-  return [scene.trim(), appearance.trim() && `The person is ${appearance.trim()}.`, PHOTO_TEMPLATE, framing].filter(Boolean).join(". ").slice(0, 1600);
+  return photographyPrompt({ scene, appearance, aspect });
 }
 
 export async function createTask(prompt: string, aspect: AspectId, references: string[] = []): Promise<TaskResult | null> {

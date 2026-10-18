@@ -29,6 +29,12 @@ export function ShellContent(): React.JSX.Element {
   const state = useAppState();
   const hydrated = useHydrated();
   const nav = useNav();
+  const [saveError, setSaveError] = useState("");
+  useEffect(() => {
+    const report = (event: Event) => setSaveError((event as CustomEvent<string>).detail);
+    window.addEventListener("cookie:save-error", report);
+    return () => window.removeEventListener("cookie:save-error", report);
+  }, []);
   const [booted, setBooted] = useState(false);
   const finishBoot = useCallback(() => setBooted(true), []);
 
@@ -76,6 +82,7 @@ export function ShellContent(): React.JSX.Element {
         </AnimatePresence>
       )}
       {hydrated && booted && <><IncomingCall /><ActiveCall /><SheetHost /><FxHost /></>}
+      {saveError && <div role="alert" className="absolute inset-x-4 top-4 z-[100] flex items-center gap-3 rounded-xl border border-[#e9c3cf] bg-white p-3 text-[12px] shadow-lg"><span className="flex-1">{saveError}</span><button type="button" aria-label="Dismiss notification" onClick={() => setSaveError("")}>Dismiss</button></div>}
     </div>
   );
 }

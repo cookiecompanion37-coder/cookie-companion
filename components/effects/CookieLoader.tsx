@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { BrandLockup } from "@/components/ui/Cookie";
 
 export function CookieLoader({ onDone }: { onDone(): void }): React.JSX.Element {
-  useEffect(() => { const timer = window.setTimeout(onDone, 1050); return () => window.clearTimeout(timer); }, [onDone]);
+  useEffect(() => { onDone(); }, [onDone]);
   return (
     <motion.div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#ffe9f0]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <div className="aura" aria-hidden="true"><span /><span /><span /></div>

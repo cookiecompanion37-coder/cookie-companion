@@ -66,7 +66,7 @@ create index if not exists story_likes_viewer_idx on public.story_likes (viewer_
 create or replace function public.toggle_story_like(p_story uuid, p_viewer text)
 returns table (liked boolean, like_count int)
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -106,7 +106,7 @@ create table if not exists public.app_state (
 create or replace function public.claim_daily_budget(p_key text, p_day text, p_max int)
 returns boolean
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -144,7 +144,7 @@ insert into public.call_slots (slot) select generate_series(1, 16) on conflict (
 create or replace function public.claim_call_slot(p_session text, p_character text, p_ttl int default 120)
 returns int
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -184,7 +184,7 @@ end $$;
 create or replace function public.release_call_slot(p_session text)
 returns void
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
@@ -214,7 +214,7 @@ create index if not exists call_schedules_user_idx on public.call_schedules (sta
 create or replace function public.ring_due_callbacks()
 returns setof public.call_schedules
 language sql
-security definer
+security invoker
 set search_path = public
 as $$
   update call_schedules
@@ -233,7 +233,7 @@ $$;
 create or replace function public.expire_ringing_callbacks(p_after int default 60)
 returns int
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -293,7 +293,7 @@ create index if not exists story_jobs_status_idx on public.story_jobs (status, c
 create or replace function public.claim_story_slot(p_force boolean default false)
 returns setof public.story_plan
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -329,7 +329,7 @@ end $$;
 create or replace function public.release_daily_budget(p_key text, p_day text)
 returns void
 language sql
-security definer
+security invoker
 set search_path = public
 as $$
   update app_state
@@ -343,7 +343,7 @@ $$;
 create or replace function public.release_story_slot(p_id uuid)
 returns void
 language sql
-security definer
+security invoker
 set search_path = public
 as $$
   update story_plan
@@ -354,7 +354,7 @@ $$;
 create or replace function public.finish_story_slot(p_id uuid, p_status text)
 returns void
 language sql
-security definer
+security invoker
 set search_path = public
 as $$
   update story_plan
@@ -367,7 +367,7 @@ $$;
 create or replace function public.take_expired_stories(p_limit int default 200)
 returns table (id uuid, media_path text)
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
@@ -414,6 +414,25 @@ on conflict (id) do update set public = true;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('cookie-photos', 'cookie-photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
+
+grant usage on schema public to anon, authenticated, service_role;
+grant select on public.characters, public.stories to anon, authenticated;
+grant all on public.characters, public.stories, public.story_likes, public.app_state,
+  public.call_slots, public.call_schedules, public.story_plan, public.story_jobs to service_role;
+
+do $$
+declare fn regprocedure;
+begin
+  for fn in select p.oid::regprocedure from pg_proc p join pg_namespace n on p.pronamespace = n.oid
+    where n.nspname = 'public' and p.proname in (
+      'toggle_story_like', 'claim_daily_budget', 'claim_call_slot', 'release_call_slot',
+      'ring_due_callbacks', 'expire_ringing_callbacks', 'claim_story_slot',
+      'release_daily_budget', 'release_story_slot', 'finish_story_slot', 'take_expired_stories')
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', fn);
+    execute format('grant execute on function %s to service_role', fn);
+  end loop;
+end $$;
 
 -- ──────────────────────────────────────────────────────────────── housekeeping ──
 -- /api/cron/cleanup calls take_expired_stories(), deletes the matching storage
